@@ -1,0 +1,30 @@
+node_modules/
+npm-debug.log*
+*.log
+
+# Local config: holds private calendar links, the panel PIN and API tokens. Never commit.
+.env
+.env.*
+!.env.example
+
+# Runtime state, measurement logs and your own shopping list
+state.json
+*.jsonl
+/shopping.json
+/shopping.txt
+/data/
+
+# Renders of your real calendar (the public screenshots are made from examples/ by `npm run demo`)
+mockups/
+
+# Generated previews and local tooling state
+.claude/
+__pycache__/
+*.pyc
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp

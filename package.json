@@ -1,0 +1,25 @@
+{
+  "name": "samsung-epaper-calendar",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "main": "src/server.mjs",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test test/",
+    "probe": "node --env-file=.env scripts/panel-probe.mjs",
+    "demo": "node scripts/render-demo.mjs"
+  },
+  "dependencies": {
+    "@loxjs/node-local-ip": "^2.0.3",
+    "@napi-rs/canvas": "^0.1.57",
+    "express": "^5.1.0",
+    "mqtt": "^5.16.1",
+    "node-ical": "^0.20.1",
+    "rrule": "^2.8.1",
+    "sharp": "^0.35.5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

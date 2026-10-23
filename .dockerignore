@@ -1,0 +1,10 @@
+.git
+node_modules
+.env
+.env.*
+.claude
+mockups
+test
+scripts
+*.md
+.DS_Store

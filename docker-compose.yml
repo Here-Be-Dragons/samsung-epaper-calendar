@@ -1,0 +1,27 @@
+services:
+  samsung-epaper-calendar:
+    build: .
+    image: samsung-epaper-calendar:latest
+    container_name: samsung-epaper-calendar
+    restart: unless-stopped
+    # Host networking (Linux): the panel fetches its pictures from this machine's own LAN address, and a
+    # Wake-on-LAN broadcast has to leave on your LAN. The server listens on PORT from .env (default 8080).
+    # On Docker Desktop (Mac or Windows) remove this line, add
+    #   ports: ["${PORT:-8080}:${PORT:-8080}"]
+    # and set PUBLIC_HOST in .env to this machine's LAN IP.
+    network_mode: host
+    # All configuration comes from .env (copy .env.example); nothing is set here,
+    # so nothing here can silently override it. (STATE_FILE is the one default: see below.)
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Remembers what the panel shows (and its battery history) across restarts.
+      - STATE_FILE=${STATE_FILE:-/data/state.json}
+    volumes:
+      - calendar-data:/data
+      # For SHOPPING_SOURCE=file, mount the list so you can edit it on the host:
+      #   - ./shopping.json:/data/shopping.json:ro      (then SHOPPING_FILE=/data/shopping.json)
+
+volumes:
+  calendar-data:
