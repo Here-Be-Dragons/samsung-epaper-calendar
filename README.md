@@ -59,3 +59,7 @@ To try it without any calendar of your own, `npm run demo` renders the `examples
 The delivery convention and much of the panel knowledge come from [fayep/Joyous](https://github.com/fayep/Joyous) and
 [lexdoudkin/frontpage](https://github.com/lexdoudkin/frontpage/blob/main/PROTOCOL.md). Fonts are DejaVu (free license, see
 `fonts/README.md`). This project is not affiliated with or endorsed by Samsung.
+
+## License
+
+[MIT](LICENSE). The bundled DejaVu fonts keep their own license (`fonts/README.md`).

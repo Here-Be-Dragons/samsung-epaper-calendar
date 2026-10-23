@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
+  "license": "MIT",
   "main": "src/server.mjs",
   "scripts": {
     "start": "node src/server.mjs",
