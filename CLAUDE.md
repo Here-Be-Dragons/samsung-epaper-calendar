@@ -7,11 +7,15 @@ User docs: `README.md`, `docs/CONFIGURATION.md`. What is known about the panel: 
 
 ## Rules
 
-- **The panel only has six inks, and we convert to them ourselves** (`src/quantize.mjs`): a frame is drawn
+- **The panel only has six inks; `src/quantize.mjs` decides who converts to them, us or the panel**: a frame is drawn
   on two layers, `content` (text, lines, boxes, bars, plates: snapped to the nearest ink, never dithered)
-  and `art` (theme decoration, in full color: dithered by us from all six inks with a regular-pattern tile per color,
-  so it reads as a tint; red is never mixed with green, nor yellow with blue). Output is a palette PNG of exactly the six inks, which the panel passes through; a
-  test decodes frames and asserts every pixel is an ink. **Anything decorative must be drawn on `S.art`**
+  and `art` (theme decoration, in full color). `ART_DITHER` says who dithers the art: `panel` (default) sends it in true
+  color for the panel to dither; `pattern` (a regular-pattern tile per color from all six inks; red is never mixed
+  with green, nor yellow with blue) and `diffusion` are done by us. `TEXT_AA` says what happens at the antialiased
+  edges of content: `panel` (default, true in-between colors, judged best on a real panel), `threshold` or `dither`
+  (both leave only the six inks). With the defaults the PNG is true color; with `pattern`/`diffusion` art and
+  `threshold`/`dither` text it is a palette PNG of exactly the six inks. Solid content is exact inks in every mode;
+  tests that assert "every pixel is an ink" render with `art: 'pattern', text: 'threshold'`. **Anything decorative must be drawn on `S.art`**
   (see `styleFor` and the `fillChrome`/`plate` helpers in `draw.mjs`); anything read goes on `ctx`. Do not
   put JPEG back: it blurs the exact inks. Theme colors may be any color; the calendar boxes stay white;
   anything read on decoration sits on a solid white plate (or gets a dark outline, `bandText`). Calendar
@@ -34,7 +38,9 @@ User docs: `README.md`, `docs/CONFIGURATION.md`. What is known about the panel: 
 
 ## Layout of the code
 
-- `src/config.mjs` env parsing (calendars, shopping, displays, redraw mode, MQTT); `src/calendar.mjs` fetching
+- `src/config.mjs` env parsing (shopping, redraw mode, MQTT, display settings); `src/configFile.mjs` the optional
+  YAML/JSON config file that holds the `calendars` and `displays` lists (`${VAR}` interpolation, strict keys, errors that
+  never print a link; `config/config.example.yaml`); the old CALENDARS / DISPLAYS variables remain the fallback; `src/calendar.mjs` fetching
   (http(s) or a local file), expansion, `buildMonth`, `dayAgenda`, `upcomingDays`; `src/draw.mjs` the drawing parts
   (header, month grid, agenda, coming up, shopping); `src/themes.mjs` the monthly themes and their motifs;
   `src/layouts.mjs` the two layouts (paper, timeline) built from those parts; `src/render.mjs` frame + encoding;

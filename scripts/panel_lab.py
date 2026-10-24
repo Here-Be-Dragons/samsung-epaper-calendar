@@ -818,11 +818,15 @@ def make_content(a):
 
 def cmd_serve(a):
     content, host = make_content(a)
+    if a.image:
+        with open(a.image, 'rb') as f:
+            png = f.read()
+        content.republish(1, f'IMG-{hashlib.sha256(png).hexdigest()[:16].upper()}', png)
     log = Log(a.log)
     start_server(content, log, a.http_port)
     say(f'Serving http://{host}:{a.http_port}/content.json (version 1, ID {content.current()[1]}). Ctrl-C to stop.')
     if a.push:
-        confirm(a, 'the panel fetches this test pattern and redraws.')
+        confirm(a, f'the panel fetches {"this picture" if a.image else "this test pattern"} and redraws.')
         push_and_wait(a, content, log)
     try:
         while True:
@@ -1520,7 +1524,8 @@ def add_options(p, sub=False):
     p.add_argument('--hours', type=float, default=dflt(24.0), help='passive: how long to log (default 24)')
     p.add_argument('--change-at', type=float, default=dflt(0.0), help='passive: change the file after this many hours')
     flag('--single-connection-check', help='session: also test the one-connection rule')
-    flag('--push', help='serve: push the test pattern at start')
+    flag('--push', help='serve: push the picture at start')
+    p.add_argument('--image', default=dflt(None), help='serve: serve this PNG instead of the test pattern (for example a sheet from scripts/font-test.mjs)')
     flag('--sleep', help='battery: put the panel to sleep afterwards even if it was awake')
     flag('--keep-awake', help='battery: do not put the panel back to sleep afterwards')
     flag('--deep', help='sleep: turn Network Standby OFF first (a Wi-Fi-off deep sleep that only the power button undoes)')

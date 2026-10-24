@@ -1,7 +1,8 @@
 # Configuration
 
-Everything is configured with environment variables, normally in a `.env` file (copy `.env.example`; `.env` is
-git-ignored because it holds private calendar links and the panel PIN). This page is the reference. For what was
+Settings are environment variables, normally in a `.env` file (copy `.env.example`; `.env` is git-ignored because
+it holds the panel PIN and API tokens). The two lists that grow and shrink, **calendars** and **displays**, can
+instead live in a config file (`config/config.yaml`, see [Calendars](#calendars)). This page is the reference. For what was
 learned about the panel itself, see [PROTOCOL.md](../PROTOCOL.md); for the diagnostic tools, [PANEL-LAB.md](PANEL-LAB.md).
 
 ## What the picture shows
@@ -10,11 +11,11 @@ learned about the panel itself, see [PROTOCOL.md](../PROTOCOL.md); for the diagn
 - **Month grid (Sunday first):** each event is just its title. All-day and multi-day events are
   colored bars that run across the days, carry on into the next week with ◂ ▸ arrows, and stack in
   lanes when they overlap. Timed events are a colored square plus the title, filling the free rows
-  of the day. Anything that does not fit becomes "+N more". Today has a yellow date and a heavy frame.
+  of the day. Anything that does not fit becomes "+N more". Today has a yellow band across its date and a heavy black frame.
 - **Today's agenda:** time, title, then whichever of these the event has: **Where** (location),
   **Video** (Meet, Zoom, Teams link), **With** (organizer and guests, leaving you out), **Notes**
-  (the description, with HTML, links and invite boilerplate stripped), **Calendar**, and **Status**
-  when tentative. Below it, **Coming up** lists the next days that have anything on. Nothing on the
+  (the description, with HTML, links and invite boilerplate stripped), and **Status**
+  when tentative; the colored bar at the left shows which calendar it is from. Below it, **Coming up** lists the next days that have anything on. Nothing on the
   picture depends on the time of day: an event that has ended stays until midnight, so the picture only
   changes when the calendar changes or the date turns.
 - **Shopping list** beside the agenda, if you set one up: open items only, with a count.
@@ -29,8 +30,8 @@ Pick one with `LAYOUT` (or `DISPLAY_<ID>_LAYOUT`, or the **Layout** selector in 
 | `paper` (default) | A printed wall calendar: colored weekday band, boxed days, red Sundays and holidays, then today's agenda and the shopping list. |
 | `timeline` | A compact month (a colored dot per timed event), then today hour by hour (blocks sized by duration, overlaps side by side) beside Coming up and the shopping list. |
 
-Red day numbers mark Sundays, and the days of any calendar with `CALENDAR_<ID>_MARK_DAYS=true` (use it
-for a holidays calendar).
+Red day numbers mark Sundays, and the days of any calendar with `mark_days: true` (`CALENDAR_<ID>_MARK_DAYS=true`;
+use it for a holidays calendar).
 
 ## Themes
 
@@ -41,8 +42,8 @@ background on real holiday dates** (a pastel Easter Sunday with a bunny, a Chris
 legend sit on white plates. **The calendar boxes stay white**, and event text, bars and gridlines stay in the
 panel's six pure inks so they read cleanly.
 
-Theme colors are not limited to the six inks: the art is full color, and the container mixes the six inks into
-each color by dithering (see "How the picture is made"). Only the core components (text, lines, bars,
+Theme colors are not limited to the six inks: the art is full color, and the six inks are mixed into each color by
+dithering, by the panel by default or by the server if you choose (see "How the picture is made"). Only the core components (text, lines, bars,
 highlights) are in the pure inks. Up close it reads as a pattern, so judge the look on the panel, not on screen.
 
 | Month | Default theme | | Month | Default theme |
@@ -75,13 +76,45 @@ the sample images in `docs/images/` from the synthetic calendars in `examples/`.
 
 ## Calendars
 
-In `.env`: `CALENDARS=personal,family,...`, then for each id `CALENDAR_<ID>_URL`, optionally
-`_NAME` and `_COLOR` (`red`, `green`, `blue`, `yellow` or `black`: the panel's own inks, so they
-stay solid and never dither). Get the URL in Google Calendar under Settings > the calendar >
-Integrate calendar > **Secret address in iCal format** (a holiday calendar has a public one).
+Any number of calendars, listed in a config file. Copy `config/config.example.yaml` to `config/config.yaml`:
+
+```yaml
+calendars:
+  - id: personal                     # optional: defaults to the name, lowercased
+    name: Me                         # optional: defaults to the calendar's own name
+    color: blue                      # red | green | blue | yellow | black (default: assigned in order)
+    url: "${PERSONAL_ICAL_URL}"      # an https:// link, a local .ics path, or ${VAR} from the environment
+  - id: holidays
+    name: US Holidays
+    color: black
+    mark_days: true                  # print its all-day dates in red on the grid
+    url: "https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics"
+```
+
+Add or remove entries to scale up or down; the legend, the grid and the agenda follow. The colors are the panel's own
+inks, so they stay solid and never dither. YAML and JSON are both accepted. Mistakes are reported by entry and key
+(`calendars[2]: unknown key "colour"`), without ever printing a link.
+
+**Where the file is found:** `CONFIG_FILE` if set (an error if it is missing), otherwise the first of
+`/config/config.yaml`, `.yml`, `.json`, then the same names in `./config/`. In Docker the compose file mounts the
+`config/` folder at `/config` read-only, so edit the file on the host and restart the container. Relative paths
+inside the file (a local `.ics`) are relative to the file. `${NAME}` in any value is replaced from the environment, so
+the links can stay in `.env` while the file is shared; a missing variable is an error that names it.
+
+**Without a config file** the old variables still work: `CALENDARS=personal,family`, then `CALENDAR_<ID>_URL`, and
+optionally `_NAME`, `_COLOR` and `_MARK_DAYS`. If the file has a `calendars` list, `CALENDARS` and `CALENDAR_*`
+are ignored (the server says so at startup). `config/config.yaml` is git-ignored and kept out of the Docker image.
+
+The same file can hold the **displays**, one entry each, with the `DISPLAY_<ID>_*` settings in lowercase
+(`host`, `pin`, `mac`, `rotation`, `layout`, `theme`, `width`, `height`, `wake`, `sleep_after_push`,
+`panel_sleeps_after_content`, `battery_check_hours`, ...; the example lists them all). A `displays` list replaces
+`DISPLAYS` and `DISPLAY_*`; the shared `DISPLAY_PIN` is still the default PIN.
+
+Get a calendar's URL in Google Calendar under Settings > the calendar > Integrate calendar >
+**Secret address in iCal format** (a holiday calendar has a public one).
 
 **A secret iCal link is a password:** anyone holding it can read that whole calendar. It lives only
-in `.env` (git-ignored) or a Secret, and the server never logs it. If a link has been shared or
+in the git-ignored config file or `.env`, or a Secret, and the server never logs it. If a link has been shared or
 pasted somewhere, use "Reset" next to it in Google Calendar to get a new one.
 
 Feeds are fetched at most every 10 minutes (`CALENDAR_FETCH_SECONDS`) and the last good copy is
@@ -133,8 +166,8 @@ and compares it with the frame on the panel. `REDRAW_MODE` decides what happens 
   Home Assistant (below) or `POST /api/displays/<id>/refresh`. There are no timed redraws.
 
 Sending means connecting to the panel over the Samsung MDC protocol (TLS, PIN, port 1515) and telling it to
-download the frame from here. Set `DISPLAY_HOST` and `DISPLAY_PIN`, or several displays with `DISPLAYS=a,b` and
-`DISPLAY_<ID>_*`. The defaults are a portrait image (1440x2560, rotation 0); a panel left in landscape mode
+download the frame from here. Set `DISPLAY_HOST` and `DISPLAY_PIN`, or several displays with a `displays:` list in the config file (or
+`DISPLAYS=a,b` and `DISPLAY_<ID>_*`). The defaults are a portrait image (1440x2560, rotation 0); a panel left in landscape mode
 uses `PANEL_WIDTH=2560 PANEL_HEIGHT=1440 OUTPUT_ROTATION=90`.
 
 **A picture counts as delivered only when the panel has fetched it.** The server watches for the panel's own
@@ -273,23 +306,32 @@ JSON), and commands to `<prefix>/<display>/set/refresh | redraw | check | batter
 
 ## How the picture is made
 
-The panel has six inks and mixes them into everything else by dithering, which smears small text. So the
-container does the conversion itself and sends a **PNG of exactly the six colors**, which the panel passes
-through unchanged. A frame is drawn on two layers:
+The panel has six inks and mixes them into everything else by dithering. Two settings decide who does that mixing,
+one for the decoration and one for the edges of text and shapes. Solid fills and lines are always exact inks, and
+colors very near an ink (outlines, today's yellow band) become that ink. A frame is drawn on two layers:
 
-- **Content** (text, lines, boxes, bars, the date and legend plates) is snapped to the nearest ink with no
-  dithering. Edges are crisp, with no gray specks.
-- **Theme art** (gradients, pastels, motifs, holiday-cell tints) is **full color**, mixed from all six inks with a
-  regular-pattern dither, so a pastel pink is white with some red, a purple is blue with red, a brown is red,
-  yellow and black, and a teal is green with blue, in an even pattern that stays clean next to text. Red is never
-  mixed with green (or yellow with blue), which would only speckle. Colors very near an ink (outlines) just become
-  that ink. `ART_DITHER=diffusion` switches to error diffusion, which is finer but noisier.
+- **Content** (text, lines, boxes, bars, the date and legend plates) is drawn in the pure inks. `TEXT_AA` is what happens at the
+  antialiased edges of letters and rounded corners:
+  - **`panel`** (default): the edge pixels get true in-between colors (a letter's edge is gray) and the panel's own dithering
+    resolves them. This looked best on a real EM32DX. The PNG is true color.
+  - **`threshold`**: a pixel is ink if at least `TEXT_CUT` (default 0.4) of it is covered, else nothing. Crisp, but thin
+    strokes can break up, which makes some lowercase letters look odd. Every pixel is exactly one of the six inks.
+  - **`dither`**: ink in proportion to coverage, by a fixed pattern, so edges are a halftone. Also six inks only.
+- **Theme art** (gradients, pastels, motifs, holiday-cell tints) is full color, and `ART_DITHER` says who mixes it:
+  - **`panel`** (default): sent in true color, so the panel's own dithering mixes the inks.
+  - **`pattern`**: we mix it from all six inks with a regular-pattern tile per color, so a pastel pink is white with some
+    red, a purple is blue with red and a teal is green with blue, evenly, so it stays clean next to text. Red is never
+    mixed with green (or yellow with blue), which would only speckle. The PNG is six colors (if `TEXT_AA` is not `panel`).
+  - **`diffusion`**: we mix it by error diffusion, which is finer but noisier.
 
-The images in `docs/images/` are therefore what the panel receives (the panel's own inks are duller than the nominal colors).
-The panel's real inks are duller than nominal. If you measure them, give the container the measured colors with
-`PANEL_PALETTE='{"red":"#8a1c0c","blue":"#1d3f8a"}'` (any of black, white, red, yellow, green, blue), and it will
-mix the art against those while still writing the exact inks. `IMAGE_FORMAT=jpeg` still exists but blurs the exact
-colors; leave it on `png`.
+To compare, push a frame in each mode (`ART_DITHER` or `TEXT_AA` in `.env`, then restart), or look at the previews:
+`/preview?art=pattern&text=threshold`. Which looks better on your panel is not something a screen can tell you.
+`scripts/text-test.mjs` and `scripts/font-test.mjs` build a sheet of variants to push to the panel and compare side by side.
+
+The `pattern` and `diffusion` modes mix against the nominal ink colors. The panel's real inks are duller. If you measure
+them, give the server the measured colors with `PANEL_PALETTE='{"red":"#8a1c0c","blue":"#1d3f8a"}'` (any of black,
+white, red, yellow, green, blue) and it will mix the art against those while still writing the exact inks.
+`IMAGE_FORMAT=jpeg` still exists but blurs the exact colors; leave it on `png`.
 
 ## Running it from Home Assistant
 

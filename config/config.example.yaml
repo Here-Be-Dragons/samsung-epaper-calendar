@@ -1,0 +1,41 @@
+# Copy to config/config.yaml and edit. config/config.yaml is git-ignored (and kept out of the Docker image):
+# it holds your private calendar links. In Docker the config/ folder is mounted at /config (see docker-compose.yml).
+#
+# This file holds the lists: any number of calendars, and optionally several displays. Everything else
+# (time zone, redraw mode, themes, MQTT, shopping list) stays in .env; see .env.example.
+# JSON works too (config.json): YAML is a superset of it.
+
+calendars:
+  # Google Calendar: Settings > the calendar > "Integrate calendar" > "Secret address in iCal format".
+  # That link is a password. Either paste it here, or keep it in .env and refer to it as ${NAME}.
+  - id: personal                       # optional: defaults to the name, lowercased
+    name: Me                           # optional: defaults to the calendar's own name
+    color: blue                        # red | green | blue | yellow | black (default: assigned in order)
+    url: "${PERSONAL_ICAL_URL}"        # an https:// link, or the path of a local .ics file
+
+  - id: family
+    name: Family
+    color: red
+    url: "https://calendar.google.com/calendar/ical/family0000%40group.calendar.google.com/private-XXXX/basic.ics"
+
+  # A holiday calendar has a public link. mark_days prints its all-day dates in red on the grid.
+  - id: holidays
+    name: US Holidays
+    color: black
+    mark_days: true
+    url: "https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics"
+
+# Optional. Without `displays`, one display is configured from DISPLAY_HOST, DISPLAY_PIN, DISPLAY_MAC ... in .env.
+# Every key below is optional except host; the names are the DISPLAY_<ID>_* settings in lowercase.
+# displays:
+#   - id: kitchen
+#     host: 192.168.1.123
+#     pin: "${KITCHEN_PIN}"            # default: DISPLAY_PIN from .env
+#     mac: "00:11:22:33:44:55"         # the panel's Wi-Fi MAC; with it set, waking is on
+#     layout: paper                    # paper | timeline
+#     theme: auto
+#     panel_sleeps_after_content: true
+#   - id: hall
+#     host: 192.168.1.124
+#     rotation: 180
+#     layout: timeline

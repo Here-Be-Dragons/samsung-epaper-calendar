@@ -8,3 +8,6 @@ test
 scripts
 *.md
 .DS_Store
+config
+examples
+docs

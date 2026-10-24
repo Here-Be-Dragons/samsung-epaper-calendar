@@ -1,0 +1,5 @@
+# The demo calendars (npm run demo). Paths are relative to this file.
+calendars:
+  - { id: personal, name: Alex, color: blue, url: personal.ics }
+  - { id: family, name: Family, color: red, url: family.ics }
+  - { id: holidays, name: Holidays, color: black, mark_days: true, url: holidays.ics }

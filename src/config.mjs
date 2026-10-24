@@ -1,4 +1,6 @@
+import fs from 'fs';
 import path from 'path';
+import { findConfigFile, parseConfigText, calendarsFromFile, displayEntriesFromFile, CALENDAR_INKS } from './configFile.mjs';
 import { MONTH_KEYS, THEME_NAMES, isThemeSetting } from './themes.mjs';
 import { fileURLToPath } from 'url';
 
@@ -14,6 +16,13 @@ function bool(name, fallback) {
   if (v === undefined) return fallback;
   return ['1', 'true', 'yes', 'on'].includes(v.trim().toLowerCase());
 }
+
+// The optional config file holds the lists that do not fit environment variables (calendars, displays); see
+// configFile.mjs and config/config.example.yaml. It is read once, here.
+const configPath = findConfigFile(process.env);
+const fileData = configPath ? parseConfigText(fs.readFileSync(configPath, 'utf8'), { env: process.env, file: configPath }) : {};
+export const CONFIG_FILE = configPath || '';
+const configDir = configPath ? path.dirname(path.resolve(configPath)) : '.';
 
 // IANA zone that decides which day it is and how event times are shown.
 export const TIMEZONE = process.env.TIMEZONE || 'America/New_York';
@@ -53,8 +62,19 @@ export const PANEL_PALETTE = (() => {
   if (!process.env.PANEL_PALETTE) return null;
   try { return JSON.parse(process.env.PANEL_PALETTE); } catch { throw new Error('PANEL_PALETTE must be JSON like {"red":"#8a1c0c"}'); }
 })();
-// How theme art is mixed from the six inks: pattern (default: clean regular tiles) or diffusion (finer, noisier).
-export const ART_DITHER = process.env.ART_DITHER === 'diffusion' ? 'diffusion' : 'pattern';
+// How theme art reaches the panel: panel (default: sent in its true colors, the panel's own dithering mixes the inks),
+// pattern (we mix the six inks into clean regular tiles) or diffusion (we mix them by error diffusion, finer, noisier).
+// Text, lines and boxes are exact inks in every mode.
+export const ART_MODES = ['panel', 'pattern', 'diffusion'];
+export const ART_DITHER = (process.env.ART_DITHER || 'panel').toLowerCase();
+if (!ART_MODES.includes(ART_DITHER)) throw new Error(`ART_DITHER must be one of ${ART_MODES.join(', ')}`);
+// How the antialiased edges of text and shapes reach the panel: panel (default: true in-between colors, and the panel's own
+// dithering resolves them; judged best on a real EM32DX), threshold (a pixel is ink if TEXT_CUT of it is covered, so every
+// pixel is exactly one of the six inks) or dither (ink in proportion to coverage, as a halftone, also six inks only).
+export const TEXT_MODES = ['panel', 'threshold', 'dither'];
+export const TEXT_AA = (process.env.TEXT_AA || 'panel').toLowerCase();
+if (!TEXT_MODES.includes(TEXT_AA)) throw new Error(`TEXT_AA must be one of ${TEXT_MODES.join(', ')}`);
+export const TEXT_CUT = Math.min(0.95, Math.max(0.05, Number(process.env.TEXT_CUT) || 0.4));
 export const JPEG_QUALITY = int('JPEG_QUALITY', 100);
 
 // --- HTTP server -------------------------------------------------------------
@@ -66,28 +86,36 @@ export const PUBLIC_HOST = process.env.PUBLIC_HOST || '';
 // Full base URL the panel uses, e.g. behind an Ingress. Overrides PUBLIC_HOST and PORT.
 export const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
 
+// The typeface (see draw.mjs): dejavu is the one bundled with the project.
+export const FONT = (process.env.FONT || 'dejavu').toLowerCase();
 export const FONT_DIR = path.join(__dirname, '..', 'fonts');
 
 // --- Calendars ------------------------------------------------------------------
-// List ids in CALENDARS and configure each with CALENDAR_<ID>_*:
+// Preferably the `calendars:` list of the config file (config/config.example.yaml). Without one, list ids in
+// CALENDARS and configure each with CALENDAR_<ID>_*:
 //   URL    the calendar's iCal link (Google: Settings > the calendar > "Secret address in iCal format").
-//          That link is a password: keep it in .env or a Secret, never in code or a ConfigMap.
+//          That link is a password: keep it in .env, the config file or a Secret, never in code or a ConfigMap.
 //   NAME   label shown in the legend and the agenda (default: the calendar's own name)
 //   COLOR  red | green | blue | yellow | black (the panel's inks; default: assigned in order)
 //   MARK_DAYS  true to print the day numbers of this calendar's all-day events in red (for a holiday calendar)
 const envSlug = (id) => id.toUpperCase().replace(/[^A-Z0-9]+/g, '_');
-const INK_NAMES = ['blue', 'red', 'green', 'black', 'yellow'];
 
-const calendarIds = (process.env.CALENDARS || '').split(',').map((s) => s.trim()).filter(Boolean);
-export const CALENDARS = calendarIds.map((id, i) => {
-  const key = (n) => `CALENDAR_${envSlug(id)}_${n}`;
-  const url = (process.env[key('URL')] || '').trim();
-  if (!url) throw new Error(`Calendar "${id}": ${key('URL')} is not set`);
-  const color = (process.env[key('COLOR')] || INK_NAMES[i % INK_NAMES.length]).trim().toLowerCase();
-  if (!INK_NAMES.includes(color)) throw new Error(`Calendar "${id}": COLOR must be one of ${INK_NAMES.join(', ')}`);
-  return { id: id.toLowerCase(), url, name: (process.env[key('NAME')] || '').trim(), color, markDays: bool(key('MARK_DAYS'), false) };
-});
-if (new Set(CALENDARS.map((c) => c.id)).size !== CALENDARS.length) throw new Error('CALENDARS contains duplicate ids');
+function calendarsFromEnv() {
+  const ids = (process.env.CALENDARS || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const calendars = ids.map((id, i) => {
+    const key = (n) => `CALENDAR_${envSlug(id)}_${n}`;
+    const url = (process.env[key('URL')] || '').trim();
+    if (!url) throw new Error(`Calendar "${id}": ${key('URL')} is not set`);
+    const color = (process.env[key('COLOR')] || CALENDAR_INKS[i % CALENDAR_INKS.length]).trim().toLowerCase();
+    if (!CALENDAR_INKS.includes(color)) throw new Error(`Calendar "${id}": COLOR must be one of ${CALENDAR_INKS.join(', ')}`);
+    return { id: id.toLowerCase(), url, name: (process.env[key('NAME')] || '').trim(), color, markDays: bool(key('MARK_DAYS'), false) };
+  });
+  if (new Set(calendars.map((c) => c.id)).size !== calendars.length) throw new Error('CALENDARS contains duplicate ids');
+  return calendars;
+}
+
+if (fileData.calendars !== undefined && process.env.CALENDARS) console.warn(`[config] CALENDARS is ignored: ${configPath} defines the calendars`);
+export const CALENDARS = fileData.calendars !== undefined ? calendarsFromFile(fileData.calendars, { baseDir: configDir, file: configPath }) : calendarsFromEnv();
 
 // --- Layout --------------------------------------------------------------------------------------
 // paper | timeline (see src/layouts.mjs). Per display: DISPLAY_<ID>_LAYOUT. Home Assistant
@@ -125,22 +153,23 @@ export const GOOGLE_REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN || '';
 export const GOOGLE_TASKS_LIST = process.env.GOOGLE_TASKS_LIST || '@default';
 
 // --- Displays ------------------------------------------------------------------
-// One server drives any number of EMDX panels, each showing the same calendar. List ids in
-// DISPLAYS and configure each with DISPLAY_<ID>_*: HOST, MAC, PIN (default: the shared
-// DISPLAY_PIN), ROTATION, WIDTH, HEIGHT, REFRESH_INTERVAL_SECONDS. With DISPLAYS unset there
-// is one display, "main", from the plain DISPLAY_HOST / DISPLAY_PIN / DISPLAY_MAC.
-function buildDisplay(id, named) {
-  const key = (name) => (named ? `DISPLAY_${envSlug(id)}_${name}` : `DISPLAY_${name}`);
-  const get = (name, fallback = '') => process.env[key(name)] ?? fallback;
+// One server drives any number of EMDX panels, each showing the same calendar. Preferably the `displays:` list
+// of the config file, whose keys are the lowercase names below. Without one, list ids in DISPLAYS and
+// configure each with DISPLAY_<ID>_*: HOST, MAC, PIN (default: the shared DISPLAY_PIN), ROTATION, WIDTH,
+// HEIGHT, REFRESH_INTERVAL_SECONDS. With neither there is one display, "main", from the plain DISPLAY_HOST /
+// DISPLAY_PIN / DISPLAY_MAC.
+// `read(name)` gives the raw setting (undefined when unset), from the environment or from a file entry.
+function buildDisplay(id, named, read) {
+  const get = (name, fallback = '') => (read(name) === undefined ? fallback : String(read(name)));
   const number = (name, fallback) => {
-    const n = parseInt(process.env[key(name)] ?? '', 10);
+    const n = parseInt(String(read(name) ?? ''), 10);
     return Number.isFinite(n) ? n : fallback;
   };
   const rotation = ((number('ROTATION', OUTPUT_ROTATION) % 360) + 360) % 360;
   if (![0, 90, 180, 270].includes(rotation)) throw new Error(`Display "${id}": ROTATION must be 0, 90, 180 or 270`);
   const flag = (name, fallback) => {
-    const v = process.env[key(name)];
-    return v === undefined ? fallback : ['1', 'true', 'yes', 'on'].includes(v.trim().toLowerCase());
+    const v = read(name);
+    return v === undefined ? fallback : typeof v === 'boolean' ? v : ['1', 'true', 'yes', 'on'].includes(String(v).trim().toLowerCase());
   };
   const mac = get('MAC').trim();
   const wake = flag('WAKE', Boolean(mac));
@@ -172,8 +201,16 @@ function buildDisplay(id, named) {
   };
 }
 
-const displayIds = (process.env.DISPLAYS || '').split(',').map((s) => s.trim()).filter(Boolean);
-export const DISPLAYS = displayIds.length ? displayIds.map((id) => buildDisplay(id, true)) : [buildDisplay('main', false)];
+function displaysFromEnv() {
+  const ids = (process.env.DISPLAYS || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const envRead = (id, named) => (name) => process.env[named ? `DISPLAY_${envSlug(id)}_${name}` : `DISPLAY_${name}`];
+  return ids.length ? ids.map((id) => buildDisplay(id, true, envRead(id, true))) : [buildDisplay('main', false, envRead('main', false))];
+}
+
+if (fileData.displays !== undefined && process.env.DISPLAYS) console.warn(`[config] DISPLAYS is ignored: ${configPath} defines the displays`);
+export const DISPLAYS = fileData.displays !== undefined
+  ? displayEntriesFromFile(fileData.displays, { file: configPath }).map(({ id, entry }) => buildDisplay(id, true, (name) => entry[name.toLowerCase()]))
+  : displaysFromEnv();
 if (new Set(DISPLAYS.map((d) => d.id)).size !== DISPLAYS.length) throw new Error('DISPLAYS contains duplicate ids');
 
 // Master switch for MDC pushes (set false for no-push preview containers).

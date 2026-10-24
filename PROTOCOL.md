@@ -169,9 +169,11 @@ Measured on the EM32DX, on battery, with readings in whole percents (so each fig
 
 - The panel has **six inks** (black, white, red, yellow, green, blue) and converts anything else by its own dithering, which the
   write-ups say smears small text. Its real inks are duller than the nominal colors.
-- This project sends a **PNG of exactly the six colors**: text, lines and boxes are snapped to the nearest ink with no dithering,
-  and decorative art is mixed in full color from all six inks by a regular-pattern dither it controls. **verified** the panel displays such a PNG
-  (a palette PNG with six entries) correctly. **unknown** how much sharper that is than letting the panel dither.
+- The server can send exact inks only (`TEXT_AA=threshold` or `dither`, `ART_DITHER=pattern` or `diffusion`: a PNG of exactly six
+  colors, which the panel displays correctly, **verified**), or true color for the panel's own dithering to resolve. **reported**
+  (one panel, by eye) that sending text with true antialiasing (`TEXT_AA=panel`, the default) looked best, better than a hard
+  threshold or a server-made halftone, so the panel's dithering does not visibly smear small text. **reported** (same panel, by
+  eye) that the theme art also looked better dithered by the panel (`ART_DITHER=panel`, the default) than mixed by the server.
 
 ## 9. Still open
 

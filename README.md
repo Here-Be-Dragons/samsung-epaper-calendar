@@ -9,13 +9,13 @@ redraws the panel only when something changed. Home Assistant can decide *when* 
   <img src="docs/images/timeline.png" width="260" alt="Timeline layout: today hour by hour beside coming up and shopping">
 </p>
 
-*Both images are rendered from the synthetic calendars in `examples/` (`npm run demo`) and are exactly what the panel receives.*
+*Both images are rendered from the synthetic calendars in `examples/` (`npm run demo`); they are the pictures the server sends.*
 
 ## What it does
 
 - **Month grid** with multi-day events as one bar that wraps across weeks, per-calendar colors, red Sundays and holidays.
 - **Today's agenda** with location, video link, guests and notes, plus **coming up** and a **shopping list** (JSON/text file or Google Tasks).
-- **Two layouts** (`paper`, `timeline`) and **twelve monthly themes** (Easter in April, and so on): full color, dithered to the panel's six inks.
+- **Two layouts** (`paper`, `timeline`) and **twelve monthly themes** (Easter in April, and so on): full color, with the panel (or the server) dithering the art down to its six inks.
 - **Sends only what changed.** The picture never depends on the time of day, so it changes when your calendar does or the date turns.
 - **Wakes a sleeping panel** (Wake-on-LAN), waits until it has really fetched the picture, reads its battery, and can let it sleep again.
 - **Home Assistant** over MQTT: a "redraw pending" sensor and a button, so an automation can redraw when the room is empty.
@@ -31,7 +31,8 @@ panel: pushing from this project's server (the pieces were tested against a fake
 ## Quick start
 
 ```bash
-cp .env.example .env        # add your calendar links; .env is git-ignored
+cp .env.example .env                              # settings; .env is git-ignored
+cp config/config.example.yaml config/config.yaml  # your calendars (any number); git-ignored
 npm install
 npm test
 node --env-file=.env src/server.mjs      # or: docker compose up --build -d
@@ -43,13 +44,13 @@ from), plus its Wi-Fi MAC as `DISPLAY_MAC` if it should be woken.
 
 To try it without any calendar of your own, `npm run demo` renders the `examples/` calendars into `docs/images/`.
 
-**Your Google Calendar secret iCal link is a password.** Keep it in `.env` (never committed) and reset it in Google Calendar if it leaks.
+**Your Google Calendar secret iCal link is a password.** Keep it in `config/config.yaml` or `.env` (both git-ignored) and reset it in Google Calendar if it leaks.
 
 ## Documentation
 
 | | |
 |---|---|
-| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Calendars, layouts, themes, shopping list, redraw modes, battery and waking settings, Home Assistant entities |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | The config file, calendars, layouts, themes, shopping list, redraw modes, battery and waking settings, Home Assistant entities |
 | [PROTOCOL.md](PROTOCOL.md) | What we know about the panel: MDC session and commands, manifest, waking, sleep, battery |
 | [docs/PANEL-LAB.md](docs/PANEL-LAB.md) | `scripts/panel_lab.py`: test your own panel (wake, battery, push, drain) |
 | [CLAUDE.md](CLAUDE.md) | Notes for contributors and AI assistants: design rules and code layout |

@@ -8,9 +8,16 @@
  *   art      theme decoration: gradients, pastels, motifs, in full color. Each color is mixed from all six
  *            inks: by a regular-pattern dither that plans a 16-ink tile per color (`art: 'pattern'`, the
  *            default: clean and even, no worms or streaks), or by error diffusion (`art: 'diffusion'`, finer
- *            but noisier). A color within `snapDistance` of an ink just becomes that ink, so outlines and
- *            flat fills stay solid and crisp.
+ *            but noisier), or not at all (`art: 'panel'`: the art is sent in its true colors and the panel's
+ *            own dithering mixes the inks). A color within `snapDistance` of an ink just becomes that ink,
+ *            so outlines and flat fills stay solid and crisp.
  * Layers are composed over white, art first, then content.
+ *
+ * How content's antialiased edge pixels (text, rounded corners) are treated is `text`: 'panel' (edge pixels get true
+ * in-between colors and the panel's own dithering resolves them), 'threshold' (a pixel is ink if covered at least
+ * `alphaCut`) or 'dither' (ink in proportion to coverage, by an ordered pattern: edges become a halftone that keeps thin
+ * strokes at their drawn weight). The last two leave every pixel exactly one of the six inks. The default is 'threshold'
+ * here; the server's default (TEXT_AA) is 'panel'.
  *
  * The dither decides which inks to mix using their *perceived* colors (the panel's inks look duller than
  * their nominal values), but always writes the nominal ink, which is what the panel expects.
@@ -43,11 +50,13 @@ const BAYER = (() => {
 /**
  * @param perceived  optional { black, white, red, yellow, green, blue } "#rrggbb" colors the inks look like
  * @param snapDistance art colors this close to an ink (weighted RGB distance) become that ink
- * @param alphaCut   content pixels with at least this much coverage (0..1) are drawn
+ * @param alphaCut   'threshold' text: content pixels with at least this much coverage (0..1) are drawn
+ * @param text       'threshold' (default), 'dither' or 'panel'
  * @param tile       pattern mode: how many inks make up one color's tile (more = finer tints)
- * @param art        'pattern' (default) or 'diffusion'
+ * @param art        'pattern', 'diffusion' or 'panel' (art left in true color for the panel to dither; the output
+ *                   then has colors other than the six inks, apart from everything in `content`)
  */
-export function createQuantizer({ perceived = null, snapDistance = 22, alphaCut = 0.4, tile = 16, art: artMode = 'pattern' } = {}) {
+export function createQuantizer({ perceived = null, snapDistance = 22, alphaCut = 0.4, tile = 16, art: artMode = 'pattern', text: textMode = 'threshold' } = {}) {
   const seen = INK_NAMES.map((name, i) => (perceived?.[name] ? rgb(perceived[name]) : NOMINAL[i]));
   const lumaOrder = [...seen.keys()].sort((a, b) => 0.3 * seen[a][0] + 0.59 * seen[a][1] + 0.11 * seen[a][2] - (0.3 * seen[b][0] + 0.59 * seen[b][1] + 0.11 * seen[b][2]));
   const snapLimit = snapDistance * snapDistance;
@@ -157,7 +166,7 @@ export function createQuantizer({ perceived = null, snapDistance = 22, alphaCut 
   /**
    * @param art      RGBA bytes of the decoration layer (non-premultiplied)
    * @param content  RGBA bytes of the content layer (non-premultiplied), or null
-   * @returns Buffer of RGB bytes, every pixel exactly one of the six inks
+   * @returns Buffer of RGB bytes: every pixel exactly one of the six inks, except art pixels in 'panel' mode
    */
   function compose(art, content, width, height) {
     const out = Buffer.alloc(width * height * 3);
@@ -168,18 +177,30 @@ export function createQuantizer({ perceived = null, snapDistance = 22, alphaCut 
         const p = y * width + x, i = p * 4;
         let ink = inks[p];
         const aa = art ? art[i + 3] : 0;
+        let color = null; // set when this pixel is left in a true color
+        if (aa > 6 && artMode === 'panel') {
+          const [r, g, b] = flatOver(art, i, aa / 255);
+          const [near, d] = nearest(seen, r, g, b);
+          if (d <= snapLimit) ink = near; else color = [r, g, b];
+        }
         if (aa > 6 && artMode === 'pattern') {
           const [r, g, b] = flatOver(art, i, aa / 255);
           const entry = plan(r, g, b);
           ink = entry.snap !== undefined ? entry.snap : entry.picks[(BAYER[((y & 7) << 3) | (x & 7)] * tile / 64) | 0];
         }
-        if (content && content[i + 3] >= cut) ink = nearest(NOMINAL, content[i], content[i + 1], content[i + 2])[0];
-        const o = p * 3, c = NOMINAL[ink];
+        const ca = content ? content[i + 3] : 0;
+        const drawn = ca >= (textMode === 'threshold' ? cut : 250) || (textMode === 'dither' && ca > 0 && ca / 255 > (BAYER[((y & 7) << 3) | (x & 7)] + 0.5) / 64);
+        if (drawn) { ink = nearest(NOMINAL, content[i], content[i + 1], content[i + 2])[0]; color = null; }
+        else if (ca > 0 && textMode === 'panel') { // a partly covered edge pixel: the content ink mixed into what is underneath
+          const over = NOMINAL[nearest(NOMINAL, content[i], content[i + 1], content[i + 2])[0]], under = color ?? NOMINAL[ink], f = ca / 255;
+          color = [0, 1, 2].map((k) => Math.round(over[k] * f + under[k] * (1 - f)));
+        }
+        const o = p * 3, c = color ?? NOMINAL[ink];
         out[o] = c[0]; out[o + 1] = c[1]; out[o + 2] = c[2];
       }
     }
     return out;
   }
 
-  return { compose };
+  return { compose, exactInks: artMode !== 'panel' && textMode !== 'panel' };
 }

@@ -7,6 +7,10 @@ npm-debug.log*
 .env.*
 !.env.example
 
+# Your calendar config (private links); only the example is published
+config/*
+!config/config.example.yaml
+
 # Runtime state, measurement logs and your own shopping list
 state.json
 *.jsonl

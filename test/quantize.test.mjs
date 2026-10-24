@@ -83,10 +83,10 @@ test('error diffusion also writes only inks and keeps content crisp', () => {
   assert.deepEqual([...out.subarray(15, 18)], [0, 0, 0]);
 });
 
-test('a frame is a PNG of exactly the six inks, in every layout, themed or not', async () => {
+test('a frame is a PNG of exactly the six inks, in every layout, themed or not (art dithered by us)', async () => {
   const geometry = geometryFor({ width: 480, height: 854, rotation: 0 });
   for (const [layout, theme] of [['paper', 'none'], ['paper', 'easter'], ['timeline', 'halloween'], ['paper', 'christmas']]) {
-    const png = await render(model, { geometry, layout, theme });
+    const png = await render(model, { geometry, layout, theme, art: 'pattern', text: 'threshold' });
     assert.equal(png.subarray(1, 4).toString(), 'PNG');
     const { counts, info } = await pixels(png);
     assert.equal(info.width, 480); assert.equal(info.height, 854);
@@ -96,7 +96,7 @@ test('a frame is a PNG of exactly the six inks, in every layout, themed or not',
 
 test('an unthemed frame uses no dithering at all: text and lines are flat inks', async () => {
   const geometry = geometryFor({ width: 480, height: 854, rotation: 0 });
-  const { counts } = await pixels(await render(model, { geometry, layout: 'paper', theme: 'none' }));
+  const { counts } = await pixels(await render(model, { geometry, layout: 'paper', theme: 'none', art: 'pattern', text: 'threshold' }));
   const total = [...counts.values()].reduce((a, b) => a + b, 0);
   assert.ok((counts.get('255,255,255') ?? 0) / total > 0.5, 'mostly white paper');
   assert.ok((counts.get('0,0,0') ?? 0) > 0 && (counts.get('0,0,255') ?? 0) > 0);
@@ -104,8 +104,63 @@ test('an unthemed frame uses no dithering at all: text and lines are flat inks',
 
 test('a frame drawn for a rotated panel is rotated into the panel image and still only the six inks', async () => {
   const geometry = geometryFor({ width: 480, height: 854, rotation: 90 });
-  const { counts, info } = await pixels(await render(model, { geometry, layout: 'paper', theme: 'easter' }));
+  const { counts, info } = await pixels(await render(model, { geometry, layout: 'paper', theme: 'easter', art: 'pattern', text: 'threshold' }));
   // The canvas is 854x480; the image sent to the panel is turned 90 degrees to 480x854.
   assert.equal(info.width, 480); assert.equal(info.height, 854);
   for (const c of counts.keys()) assert.ok(INKS.has(c), c);
+});
+
+test('panel mode leaves the art in true color and keeps everything read as exact inks', async () => {
+  const w = 16, h = 4, art = new Uint8Array(w * h * 4), content = new Uint8Array(w * h * 4);
+  for (let p = 0; p < w * h; p++) art.set(p === 0 ? [255, 0, 0, 255] : [126, 87, 194, 255], p * 4); // pixel 0 is a pure ink, the rest purple
+  content.set([0, 0, 0, 255], 5 * 4);
+  const q = createQuantizer({ art: 'panel' });
+  const out = q.compose(art, content, w, h);
+  assert.equal(q.exactInks, false);
+  assert.deepEqual([...out.subarray(0, 3)], [255, 0, 0], 'a color on an ink is that ink');
+  assert.deepEqual([...out.subarray(3, 6)], [126, 87, 194], 'purple is sent as purple');
+  assert.deepEqual([...out.subarray(15, 18)], [0, 0, 0], 'content is an exact ink');
+  assert.equal(createQuantizer().exactInks, true);
+});
+
+test('art panel mode: themed frames are true color PNGs, and with exact-ink text an unthemed one is still six inks', async () => {
+  const geometry = geometryFor({ width: 480, height: 854, rotation: 0 });
+  const themed = await pixels(await render(model, { geometry, layout: 'paper', theme: 'easter', art: 'panel', text: 'threshold' }));
+  assert.ok(themed.counts.size > 20, 'many colors');
+  const plain = await pixels(await render(model, { geometry, layout: 'paper', theme: 'none', art: 'panel', text: 'threshold' }));
+  for (const c of plain.counts.keys()) assert.ok(INKS.has(c), `${c} is not an ink`);
+  const png = await render(model, { geometry, layout: 'paper', theme: 'easter', art: 'panel', text: 'threshold' });
+  assert.equal((await sharp(png).metadata()).paletteBitDepth, undefined, 'not a palette PNG');
+  assert.throws(() => render(model, { geometry, layout: 'paper', art: 'bogus' }), /Unknown art mode/);
+  assert.throws(() => render(model, { geometry, layout: 'paper', text: 'bogus' }), /Unknown text mode/);
+});
+
+test("today is a yellow band across the date inside a heavy black frame, not a yellow box", async () => {
+  const geometry = geometryFor({ width: 480, height: 854, rotation: 0 });
+  const yellow = async (m) => (await pixels(await render(m, { geometry, layout: 'paper', theme: 'none', art: 'pattern', text: 'threshold' }))).counts.get('255,255,0') ?? 0;
+  const n = await yellow(model);
+  assert.ok(n > 150, 'a band of yellow ink');
+  assert.ok(n < 1200, 'but far less than a whole box (about 5700 pixels at this size)');
+  assert.ok(await yellow({ ...model, today: '2026-04-20' }) > 150, 'any day');
+});
+
+test('text edge modes: panel keeps in-between colors, threshold and dither stay six inks', () => {
+  const w = 16, h = 8, art = null, content = new Uint8Array(w * h * 4);
+  for (let p = 0; p < w * h; p++) content.set([0, 0, 0, p === 0 ? 255 : p < 8 ? 128 : p < 12 ? 40 : 0], p * 4); // a solid pixel, half-covered, faint
+  const count = (out) => { const set = new Set(); for (let i = 0; i < out.length; i += 3) set.add(`${out[i]},${out[i + 1]},${out[i + 2]}`); return set; };
+  const panel = createQuantizer({ text: 'panel' }), threshold = createQuantizer({ text: 'threshold' }), dither = createQuantizer({ text: 'dither' });
+  const edge = [...panel.compose(art, content, w, h).subarray(3, 6)]; // a half-covered black pixel on white
+  assert.ok(edge[0] > 100 && edge[0] < 155 && edge[0] === edge[1] && edge[1] === edge[2], `a mid gray (${edge})`);
+  assert.equal(panel.exactInks, false);
+  assert.deepEqual([...panel.compose(art, content, w, h).subarray(0, 3)], [0, 0, 0], 'a fully covered pixel is the ink');
+  for (const q of [threshold, dither]) { assert.equal(q.exactInks, true); for (const c of count(q.compose(art, content, w, h))) assert.ok(INKS.has(c), `${c} is an ink`); }
+  assert.ok(count(dither.compose(art, content, w, h)).size >= 2);
+});
+
+test('the default render antialiases text for the panel to dither (TEXT_AA=panel), as a true color PNG', async () => {
+  const geometry = geometryFor({ width: 480, height: 854, rotation: 0 });
+  const { counts } = await pixels(await render(model, { geometry, layout: 'paper', theme: 'none', art: 'pattern' }));
+  assert.ok(counts.size > 8, 'grays and tints from antialiased edges');
+  const black = counts.get('0,0,0') ?? 0;
+  assert.ok(black > 1000, 'with plenty of solid ink too');
 });

@@ -34,9 +34,37 @@ export function ensureFonts() {
   fontsRegistered = true;
 }
 
+// Font sets: a regular and a bold family. The frame being drawn uses one (picked with useFont, like useGeometry:
+// frames render one at a time). More sets can be added from font files at run time with addFontSet.
+const FONT_SETS = new Map([['dejavu', { regular: 'DejaVu Sans', bold: 'DejaVu Sans Bold' }]]);
+let font = FONT_SETS.get('dejavu');
+export const fontSetNames = () => [...FONT_SETS.keys()];
+/**
+ * Adds a font from files. `boldFile` may be null (bold text then uses the regular weight). A pixel font passes
+ * `pixel: { em, cap }`: `em` is the font size in px at which one font pixel is one screen pixel, `cap` the capital height
+ * in font pixels. Sizes then snap to whole multiples, so the pixels stay square, and text lands on whole pixels.
+ */
+export function addFontSet(name, regularFile, boldFile, { pixel = null } = {}) {
+  GlobalFonts.registerFromPath(regularFile, name);
+  if (boldFile) GlobalFonts.registerFromPath(boldFile, `${name} Bold`);
+  FONT_SETS.set(name, { regular: name, bold: boldFile ? `${name} Bold` : name, pixel });
+}
+// The size to draw `n` design units at: a pixel font's nearest whole multiple with about the capital height DejaVu has.
+const sizeFor = (n) => (font.pixel ? Math.max(1, Math.round((0.73 * px(n)) / font.pixel.cap)) * font.pixel.em : px(n));
+/** Makes text on `ctx` suit the active font: whole-pixel positions for a pixel font. */
+export function dressContext(ctx) {
+  if (!font.pixel) return;
+  const fill = ctx.fillText.bind(ctx);
+  ctx.fillText = (text, x, y, maxWidth) => fill(text, Math.round(x), Math.round(y), maxWidth);
+}
+export function useFont(name) {
+  if (!FONT_SETS.has(name)) throw new Error(`Unknown font "${name}". Available: ${fontSetNames().join(', ')}`);
+  font = FONT_SETS.get(name);
+}
+
 export const F = {
-  regular: (n) => `${px(n)}px "DejaVu Sans"`,
-  bold: (n) => `bold ${px(n)}px "DejaVu Sans Bold"`,
+  regular: (n) => `${sizeFor(n)}px "${font.regular}"`,
+  bold: (n) => `bold ${sizeFor(n)}px "${font.bold}"`,
 };
 
 /**
@@ -258,18 +286,22 @@ export function drawMonth(ctx, model, x, y, w, h, S, { compact = false } = {}) {
       const cx = x + ci * colW;
       const inMonth = monthOf(key) === monthOf(model.today);
       const holiday = stamps.get(key); // the theme's tinted, decorated background for a holiday
-      if (holiday) drawCellDecor(S.art, holiday, cx, top, colW, rowH, px(compact ? 24 : 30));
+      const isToday = key === model.today;
+      const motifSize = px(compact ? 24 : 30);
+      if (holiday) drawCellDecor(S.art, holiday, cx, top, colW, rowH, motifSize);
+      if (isToday) {
+        // Today: a yellow band across the date number (not down into the events), inside a heavy black frame.
+        // Yellow is the ink itself, so it never dithers. On the art layer, with the holiday's motif redrawn on top.
+        const a = S.art; // the band runs out under the frame, so no sliver of paper shows between them
+        a.fillStyle = YELLOW; a.fillRect(Math.floor(cx), Math.floor(top), Math.ceil(cx + colW) - Math.floor(cx), Math.round(NUM_H));
+        if (holiday) drawMotif(a, holiday.motif, cx + colW - motifSize * 0.62, top + motifSize * 0.58, motifSize, holiday.variant ?? 0);
+      }
       ctx.strokeStyle = BLACK; ctx.lineWidth = line; ctx.strokeRect(cx, top, colW, rowH);
       const n = String(dayOfMonth(key));
-      const isToday = key === model.today;
-      if (isToday) {
-        ctx.fillStyle = YELLOW; roundedRect(ctx, cx + px(4), top + px(3), px(28), px(22), px(5)); ctx.fill();
-        ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(2)); ctx.stroke();
-      }
       const red = !isToday && (ci === 0 || marked.has(key));
       ctx.fillStyle = red ? RED : BLACK;
       ctx.font = inMonth || isToday ? F.bold(17) : F.regular(15);
-      ctx.fillText(n, cx + px(isToday ? 18 : 8) - (isToday ? ctx.measureText(n).width / 2 : 0), top + px(20));
+      ctx.fillText(n, cx + px(8), top + px(20));
       if (!inMonth) { // a small tick marks days from the neighbouring months, since there is no gray to dim them with
         ctx.fillStyle = BLACK; ctx.font = F.regular(11);
         ctx.fillText(new Date(Date.UTC(2000, Number(key.slice(5, 7)) - 1, 1)).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short' }), cx + px(26), top + px(19));
@@ -286,8 +318,13 @@ export function drawMonth(ctx, model, x, y, w, h, S, { compact = false } = {}) {
     // across the days of the week, over the grid lines; where the event carries on into the
     // neighbouring week it runs to the edge of the grid and ends in an arrow, and the next week
     // repeats the title.
+    // A day with more entries than rows keeps its last row for "+N more", so a bar on that row is not drawn
+    // either (it is counted in the "+N more" instead). Compact months show the count elsewhere and need no row.
+    const entriesOn = (ci) => week.bars.filter((b) => ci >= b.startCol && ci <= b.endCol).length + (week.singles.get(week.days[ci])?.length ?? 0);
+    const overflowing = week.days.map((_, ci) => !compact && entriesOn(ci) > capacity);
+    const drawn = (bar) => bar.lane < capacity - (overflowing.slice(bar.startCol, bar.endCol + 1).some(Boolean) ? 1 : 0);
     for (const bar of week.bars) {
-      if (bar.lane >= capacity) continue;
+      if (!drawn(bar)) continue;
       const gap = px(2);
       const bx = x + bar.startCol * colW + (bar.contL ? 0 : gap);
       const bxEnd = x + (bar.endCol + 1) * colW - (bar.contR ? 0 : gap);
@@ -307,7 +344,7 @@ export function drawMonth(ctx, model, x, y, w, h, S, { compact = false } = {}) {
     week.days.forEach((key, ci) => {
       const evs = week.singles.get(key) ?? [];
       const covering = week.bars.filter((b) => ci >= b.startCol && ci <= b.endCol);
-      const hiddenBars = covering.filter((b) => b.lane >= capacity).length;
+      const hiddenBars = covering.filter((b) => !drawn(b)).length;
       const cx = x + ci * colW;
       if (compact) {
         const dot = px(8), step = px(11);
@@ -322,7 +359,7 @@ export function drawMonth(ctx, model, x, y, w, h, S, { compact = false } = {}) {
         if (more > 0) { ctx.fillStyle = BLACK; ctx.font = F.bold(11); ctx.fillText(`+${more}`, cx + px(6) + showDots * step, dy + px(9)); }
         return;
       }
-      const taken = new Set(covering.filter((b) => b.lane < capacity).map((b) => b.lane));
+      const taken = new Set(covering.filter(drawn).map((b) => b.lane));
       const free = Array.from({ length: capacity }, (_, i) => i).filter((i) => !taken.has(i));
       let shown = evs;
       let more = hiddenBars;
@@ -371,7 +408,6 @@ export function detailLines(ev) {
   if (people.length) lines.push(['With', people.length > 3 ? `${people.slice(0, 3).join(', ')} +${people.length - 3}` : people.join(', ')]);
   if (ev.description) lines.push(['Notes', ev.description]);
   if (ev.status === 'TENTATIVE') lines.push(['Status', 'Tentative']);
-  lines.push(['Calendar', ev.cal.name + (ev.recurring ? ' (repeats)' : '')]);
   return lines;
 }
 
@@ -397,7 +433,7 @@ export function drawAgenda(ctx, model, x, y, w, h, S) {
     const titleH = titleLines.length * px(24);
     const detailRoom = Math.max(0, Math.floor((maxH - titleH - px(12)) / px(19)));
     const shown = detail.slice(0, Math.min(detail.length, detailRoom));
-    const h2 = titleH + shown.length * px(19) + px(12);
+    const h2 = Math.max(titleH + shown.length * px(19) + px(12), px(50)); // at least the two-line time label
     if (h2 > maxH) return 0;
     ctx.fillStyle = INK[ink]; ctx.fillRect(x, cy + px(3), px(5), h2 - px(8));
     if (outlined(ink)) { ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); ctx.strokeRect(x, cy + px(3), px(5), h2 - px(8)); }
