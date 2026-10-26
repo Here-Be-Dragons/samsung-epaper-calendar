@@ -7,7 +7,7 @@
   "main": "src/server.mjs",
   "scripts": {
     "start": "node src/server.mjs",
-    "test": "node --test test/",
+    "test": "node --test test/*.test.mjs",
     "probe": "node --env-file=.env scripts/panel-probe.mjs",
     "demo": "node scripts/render-demo.mjs",
     "art-guides": "node scripts/art-template.mjs"
