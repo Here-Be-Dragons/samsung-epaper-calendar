@@ -4,11 +4,9 @@
   <a href="docs/images/panel-photo.jpg"><img src="docs/images/panel-photo.jpg" width="320" alt="The calendar on a Samsung EMDX color e-paper panel mounted in a kitchen, showing the Easter theme"></a>
 </p>
 
-*The real panel, showing the Easter theme from the synthetic example calendars. Click for a larger view.*
-
-A small server that draws a **family calendar** (month grid, today's agenda, shopping list) for a **Samsung EMDX color
-e-paper display** and delivers it over Samsung's MDC protocol. It reads Google Calendar iCal links, themes each month, and
-redraws the panel only when something changed. Home Assistant can decide *when* over MQTT.
+A small server that draws a combined calendar (month grid, today's agenda, shopping list) for a Samsung EMDX color
+e-paper display and delivers it over Samsung's MDC protocol. It reads un-authenticated iCal links, themes each month, and
+redraws the panel only when something changed. Home Assistant can decide *when* over MQTT to avoid redraws when people are present.
 
 <p>
   <a href="docs/images/paper-easter.png"><img src="docs/images/paper-easter.png" width="150" alt="Month grid, today's agenda and shopping list, Easter theme"></a>
@@ -28,19 +26,18 @@ redraws the panel only when something changed. Home Assistant can decide *when* 
 
 ## Status
 
-Unofficial, and built against **one EM32DX**. Samsung documents none of the panel protocol, so what is known comes from
-community write-ups plus our own measurements, with each claim labeled in **[PROTOCOL.md](PROTOCOL.md)**. Honest headline:
-the panel wakes and updates reliably over Wi-Fi, but **keeping it wakeable costs about 1.5 to 2 % of battery an hour**
-(about two days a charge), so for a permanent install plan on USB-C or PoE+ power. Not yet exercised end to end on a real
-panel: pushing from this project's server (the pieces were tested against a fake panel and, on real hardware, with the lab script).
+Unofficial, and built against the EM32DX. Samsung documents none of the panel protocol, so what is known comes from
+community write-ups plus our own measurements, with each claim labeled in **[PROTOCOL.md](PROTOCOL.md)**.
+ The panel wakes and updates reliably over Wi-Fi, but **keeping it wakeable costs about 1.5 to 2 % of battery an hour**
+(about two days a charge), so for a permanent install plan on USB-C or PoE+ power.
 
 ## Quick start
 
 With Docker (Intel/AMD or ARM, such as a Raspberry Pi or Home Assistant Yellow), using the published image:
 
 ```bash
-cp .env.example .env                              # settings; .env is git-ignored
-cp config/config.example.yaml config/config.yaml  # your calendars and themes; git-ignored
+cp .env.example .env                              # settings
+cp config/config.example.yaml config/config.yaml  # your calendars and themes
 docker compose up -d                              # pulls ghcr.io/here-be-dragons/samsung-epaper-calendar (or builds it)
 ```
 
@@ -57,11 +54,11 @@ Open `http://localhost:8080/` to see the latest frame, or `/preview?layout=timel
 from), plus its Wi-Fi MAC as `DISPLAY_MAC` if it should be woken. To try it without any calendar of your own,
 `npm run demo` renders the `examples/` calendars into `docs/images/`.
 
-**Your Google Calendar secret iCal link is a password.** Keep it in `config/config.yaml` or `.env` (both git-ignored) and reset it in Google Calendar if it leaks.
+**Your Google Calendar secret iCal link is a password.** Keep it in `config/config.yaml` or `.env` (both git-ignored).
 
 ## Configuring
 
-Settings are environment variables (`.env`, see `.env.example`). The lists that grow and shrink, your calendars (any number),
+Settings are environment variables (`.env`, see `.env.example`). The lists that grow and shrink, your calendars,
 displays and themes, live in `config/config.yaml`, which the compose file mounts at `/config`:
 
 ```yaml
@@ -113,7 +110,7 @@ themes:
 
 A custom theme changes the scenery's colors (bands, sky, pattern, ground, holiday tints) and chooses which motifs appear. The motifs
 are drawn pictures with their own colors; to change one, or the whole banner and footer, draw your own PNGs
-([themes/README.md](themes/README.md)). Your art is kept out of git, so it stays yours.
+([themes/README.md](themes/README.md)).
 
 <p>
   <a href="docs/images/themes.png"><img src="docs/images/themes.png" width="320" alt="The twelve month designs"></a>
