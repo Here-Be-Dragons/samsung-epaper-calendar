@@ -1,15 +1,21 @@
 # samsung-epaper-calendar
 
+<p align="center">
+  <a href="docs/images/panel-photo.jpg"><img src="docs/images/panel-photo.jpg" width="320" alt="The calendar on a Samsung EMDX color e-paper panel mounted in a kitchen, showing the Easter theme"></a>
+</p>
+
+*The real panel, showing the Easter theme from the synthetic example calendars. Click for a larger view.*
+
 A small server that draws a **family calendar** (month grid, today's agenda, shopping list) for a **Samsung EMDX color
 e-paper display** and delivers it over Samsung's MDC protocol. It reads Google Calendar iCal links, themes each month, and
 redraws the panel only when something changed. Home Assistant can decide *when* over MQTT.
 
 <p>
-  <img src="docs/images/paper-easter.png" width="260" alt="Month grid, today's agenda and shopping list, Easter theme">
-  <img src="docs/images/timeline.png" width="260" alt="Timeline layout: today hour by hour beside coming up and shopping">
+  <a href="docs/images/paper-easter.png"><img src="docs/images/paper-easter.png" width="150" alt="Month grid, today's agenda and shopping list, Easter theme"></a>
+  <a href="docs/images/timeline.png"><img src="docs/images/timeline.png" width="150" alt="Timeline layout: today hour by hour beside coming up and shopping"></a>
 </p>
 
-*Both images are rendered from the synthetic calendars in `examples/` (`npm run demo`); they are the pictures the server sends.*
+*Both images are rendered from the synthetic calendars in `examples/` (`npm run demo`); they are the pictures the server sends. Click one for the full-size render.*
 
 ## What it does
 
@@ -110,8 +116,8 @@ are drawn pictures with their own colors; to change one, or the whole banner and
 ([themes/README.md](themes/README.md)). Your art is kept out of git, so it stays yours.
 
 <p>
-  <img src="docs/images/themes.png" width="640" alt="The twelve month designs">
-  <img src="docs/images/holidays.png" width="640" alt="The holiday themes">
+  <a href="docs/images/themes.png"><img src="docs/images/themes.png" width="320" alt="The twelve month designs"></a>
+  <a href="docs/images/holidays.png"><img src="docs/images/holidays.png" width="320" alt="The holiday themes"></a>
 </p>
 
 ## Documentation
