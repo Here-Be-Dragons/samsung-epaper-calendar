@@ -6,12 +6,12 @@
  *   paper     month grid like a printed wall calendar, then today's agenda and the shopping list
  *   timeline  a compact month, then today as an hour-by-hour timeline beside coming up and shopping
  */
-import { BLACK } from './inks.mjs';
+import { BLACK, WHITE } from './inks.mjs';
 import { px } from './scale.mjs';
 import { dayAgenda, buildMonth } from './calendar.mjs';
 import { longDay, minuteOfDay, shortDay } from './dates.mjs';
 import {
-  INK, ON, F, MARGIN, WEEKDAY_H, headerH, footerH, outlined, fit, drawText, wrap,
+  INK, ON, F, MARGIN, WEEKDAY_H, headerH, footerH, outlined, fit, drawText, wrap, roundedRect,
   drawHeader, drawMonth, drawAgenda, drawComingUp, drawShopping, panelHeader, timeLabel,
 } from './draw.mjs';
 
@@ -55,12 +55,12 @@ function compactTop(ctx, model, w, S) {
 /**
  * Splits overlapping events into side-by-side lanes. `span` is [{ s, e }] in minutes, sorted by start; `minMinutes` is the
  * shortest time a drawn block covers (a block is never shorter than its title needs), so an event is laid out by
- * `d = max(e, s + minMinutes)`. Returns each event with its `lane` and the `lanes` its cluster of overlaps has in all.
+ * `d = max(e, s + minMinutes)`. Returns each event with its `lane`, the `lanes` its cluster of overlaps has in all, and the `cluster` it is in.
  */
 export function assignLanes(span, minMinutes = 0) {
   const laid = [];
-  let cluster = [], clusterEnd = -1;
-  const flush = () => { const lanes = Math.max(0, ...cluster.map((c) => c.lane + 1)); cluster.forEach((c) => { c.lanes = lanes; laid.push(c); }); cluster = []; };
+  let cluster = [], clusterEnd = -1, clusters = 0;
+  const flush = () => { const lanes = Math.max(0, ...cluster.map((c) => c.lane + 1)); cluster.forEach((c) => { c.lanes = lanes; c.cluster = clusters; laid.push(c); }); clusters++; cluster = []; };
   for (const t0 of span) {
     const t = { ...t0, d: Math.max(t0.e, t0.s + minMinutes) };
     if (t.s >= clusterEnd && cluster.length) flush();
@@ -73,6 +73,45 @@ export function assignLanes(span, minMinutes = 0) {
   return laid;
 }
 
+/**
+ * Where overlapping blocks start, left to right, the way Google Calendar cascades them. `items` are one cluster of overlapping
+ * blocks in start order: { top, bottom, zone, textW } (`zone` is the height of a block's title and time at its top, `textW` how
+ * wide they are). A later block lies over the earlier ones and reaches the right edge. It starts a little to the right of
+ * any earlier block it overlaps (`indent`), and, if it starts within that block's title, just past the end of that title, so it
+ * never covers text. It is never squeezed below `minW`. Returns the left edge of each.
+ */
+export function cascade(items, { left0, right, indent, minW }) {
+  const placed = [];
+  return items.map((it) => {
+    let left = left0;
+    for (const e of placed) {
+      if (e.bottom <= it.top) continue;
+      left = Math.max(left, e.left + indent);
+      if (it.top < e.top + e.zone) left = Math.max(left, e.left + e.textW);
+    }
+    left = Math.min(left, right - minW);
+    placed.push({ ...it, left });
+    return left;
+  });
+}
+
+/** Minutes of the day an event covers on `key`: from 0 if it began earlier, to 1440 if it carries on (or ends exactly at midnight). */
+export function dayMinutes(ev, key) {
+  const s = ev.startDay < key ? 0 : minuteOfDay(ev.start);
+  let e = ev.endDay > key ? 1440 : minuteOfDay(ev.end);
+  if (e === 0 && ev.end > ev.start) e = 1440; // ends at 12 AM: runs to the end of the day, not zero length
+  if (e <= s) e = s + 30;
+  return { s, e };
+}
+
+/**
+ * Today, hour by hour. Three things keep a crowded or odd day readable (all off unless S.ambientHours / S.breakHours are set):
+ *  - an event as long as S.ambientHours (a 24/7 gym: a whole day) is treated as an all-day event: a chip above the hours, taking no
+ *    part in laying out the day, so it neither stretches the hours nor takes width;
+ *  - a run of S.breakHours or more empty hours is folded into one thin break row, so the busy part keeps its height;
+ *  - if the hours still cannot be drawn legibly (a block an hour long would be tiny, or more than six events overlapping at once),
+ *    the day is listed in time order instead.
+ */
 function drawTimeline(ctx, model, x, y, w, h, S) {
   const bottom = y + h;
   let cy = panelHeader(ctx, x, y, w, 'TODAY', longDay(model.today), S);
@@ -80,76 +119,150 @@ function drawTimeline(ctx, model, x, y, w, h, S) {
   const list = dayAgenda(model, key);
   const allDay = list.filter((e) => e.allDay);
   const timed = list.filter((e) => !e.allDay);
+  const ambientMin = (S.ambientHours ?? 0) * 60;
+  const ambient = ambientMin > 0 ? timed.filter((e) => (e.end - e.start) / 60000 >= ambientMin) : [];
+  const normal = timed.filter((e) => !ambient.includes(e));
 
-  // All-day events as colored bars across the top.
+  // All-day events, then ambient ones, as colored bars across the top.
   const chipH = px(22), maxChips = 4;
-  allDay.slice(0, maxChips).forEach((ev) => {
+  const chips = [...allDay.map((ev) => ({ ev, extra: '' })), ...ambient.map((ev) => ({ ev, extra: '' }))];
+  chips.slice(0, maxChips).forEach(({ ev, extra }) => {
     const ink = ev.cal.color;
-    ctx.fillStyle = INK[ink]; ctx.fillRect(x, cy + px(4), w, chipH);
-    if (outlined(ink)) { ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); ctx.strokeRect(x, cy + px(4), w, chipH); }
+    ctx.fillStyle = INK[ink]; roundedRect(ctx, x, cy + px(4), w, chipH, px(5)); ctx.fill();
+    if (outlined(ink)) { ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); roundedRect(ctx, x, cy + px(4), w, chipH, px(5)); ctx.stroke(); }
     ctx.fillStyle = ON[ink]; ctx.font = F.bold(14);
-    const span = ev.endDay > ev.startDay ? `  (${shortDay(ev.startDay).replace(/^\w+, /, '')} – ${shortDay(ev.endDay).replace(/^\w+, /, '')})` : '';
+    const span = extra || (ev.endDay > ev.startDay ? `  (${shortDay(ev.startDay).replace(/^\w+, /, '')} – ${shortDay(ev.endDay).replace(/^\w+, /, '')})` : '');
     drawText(ctx, fit(ctx, ev.title + span, F.bold(14), w - px(14)), x + px(7), cy + px(4) + px(16));
     cy += chipH + px(4);
   });
-  if (allDay.length > maxChips) {
-    ctx.fillStyle = BLACK; ctx.font = F.bold(13); ctx.fillText(`+${allDay.length - maxChips} more all-day`, x + px(4), cy + px(18)); cy += px(24);
+  if (chips.length > maxChips) {
+    ctx.fillStyle = BLACK; ctx.font = F.bold(13); ctx.fillText(`+${chips.length - maxChips} more all-day`, x + px(4), cy + px(18)); cy += px(24);
   }
   cy += px(8);
-  if (!timed.length) {
+  if (!normal.length) {
     ctx.fillStyle = BLACK; ctx.font = F.regular(18);
-    ctx.fillText(allDay.length ? 'Nothing timed today.' : 'Nothing scheduled today.', x + px(8), cy + px(24));
+    ctx.fillText(chips.length ? 'Nothing timed today.' : 'Nothing scheduled today.', x + px(8), cy + px(24));
     return;
   }
 
   // The visible hours: from an hour before the first event to an hour after the last, at least six.
-  const span = timed.map((ev) => {
-    const s = ev.startDay < key ? 0 : minuteOfDay(ev.start);
-    let e = ev.endDay > key ? 1440 : minuteOfDay(ev.end);
-    if (e <= s) e = s + 30;
-    return { ev, s, e };
-  }).sort((a, b) => a.s - b.s || b.e - a.e);
+  const span = normal.map((ev) => ({ ev, ...dayMinutes(ev, key) })).sort((a, b) => a.s - b.s || b.e - a.e);
   let startH = Math.max(0, Math.floor(Math.min(...span.map((t) => t.s)) / 60) - 1);
   let endH = Math.min(24, Math.ceil(Math.max(...span.map((t) => t.e)) / 60) + 1);
   while (endH - startH < 6) { if (endH < 24) endH++; if (endH - startH < 6 && startH > 0) startH--; }
   const areaTop = cy, areaH = bottom - cy - px(6);
-  const hourH = Math.min(px(90), areaH / (endH - startH));
   const axisW = px(46), bx0 = x + axisW, bw = w - axisW - px(2);
-  const yOf = (min) => areaTop + ((min - startH * 60) / 60) * hourH;
 
-  ctx.textBaseline = 'alphabetic';
-  for (let hr = startH; hr <= endH; hr++) {
-    const ly = yOf(hr * 60);
-    ctx.fillStyle = BLACK; ctx.fillRect(bx0, ly, bw, 1);
-    if (hr < endH) {
-      ctx.font = F.regular(11);
-      const label = hr === 0 ? '12 AM' : hr < 12 ? `${hr} AM` : hr === 12 ? 'Noon' : `${hr - 12} PM`;
-      ctx.fillText(label, x + px(2), ly + px(11));
-    }
+  // The hour rows. A run of S.breakHours or more empty hours is folded into one thin break row.
+  const busy = (hr) => span.some((t) => t.s < (hr + 1) * 60 && Math.max(t.e, t.s + 30) > hr * 60);
+  const rows = []; // { hr } or { from, to } for a break
+  for (let hr = startH; hr < endH;) {
+    let run = hr;
+    while (S.breakHours > 0 && run < endH && !busy(run)) run++;
+    if (S.breakHours > 0 && run - hr >= S.breakHours) { rows.push({ from: hr, to: run }); hr = run; } else { rows.push({ hr }); hr++; }
   }
-  ctx.fillRect(bx0, yOf(startH * 60), 1, (endH - startH) * hourH);
+  const breakH = px(26), nHours = rows.filter((r) => r.hr !== undefined).length, nBreaks = rows.length - nHours;
+  const hourH = Math.min(px(90), (areaH - nBreaks * breakH) / nHours);
+  let ry = areaTop;
+  for (const r of rows) { r.y = ry; ry += r.hr !== undefined ? hourH : breakH; }
+  const areaEnd = ry;
+  /** The y of a minute of the day (a minute inside a folded break maps to the break's top). */
+  const yOf = (min) => {
+    if (min >= endH * 60) return areaEnd;
+    const hr = Math.floor(min / 60), row = rows.find((r) => (r.hr !== undefined ? r.hr === hr : hr >= r.from && hr < r.to));
+    return row ? row.y + (row.hr !== undefined ? ((min % 60) / 60) * hourH : 0) : areaTop;
+  };
 
   // Overlapping events share the width: each cluster of overlaps is split into side-by-side lanes. A block is never drawn
   // shorter than a title needs, so a short event is laid out by the minutes its block covers (`d`), not just its own: the next
   // event may start before that block ends on the page.
   const laid = assignLanes(span, ((px(24) + 3) * 60) / hourH);
 
-  for (const t of laid) {
-    const { ev } = t, ink = ev.cal.color;
-    const lw = bw / t.lanes;
-    const top = yOf(t.s) + 1, bh = Math.max(px(24), yOf(t.e) - yOf(t.s) - 2);
-    const bx = bx0 + t.lane * lw + px(3), bwid = lw - px(5);
-    ctx.fillStyle = INK[ink]; ctx.fillRect(bx, top, bwid, bh);
-    if (outlined(ink)) { ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); ctx.strokeRect(bx, top, bwid, bh); }
-    ctx.fillStyle = ON[ink];
-    const inner = bwid - px(10);
-    const titleLines = wrap(ctx, ev.title, F.bold(13), inner, Math.max(1, Math.min(3, Math.floor((bh - px(6)) / px(16)) - (bh > px(44) ? 1 : 0))));
-    let ty = top + px(15);
-    if (bh > px(44)) { ctx.font = F.regular(11); drawText(ctx, fit(ctx, timeLabel(ev, key).join(' ').replace('– ', '– '), F.regular(11), inner), bx + px(6), ty - px(1)); ty += px(15); }
-    ctx.font = F.bold(13);
-    titleLines.forEach((l) => { drawText(ctx, l, bx + px(6), ty); ty += px(16); });
-    if (ev.location && ty + px(10) < top + bh) { ctx.font = F.regular(11); drawText(ctx, fit(ctx, ev.location, F.regular(11), inner), bx + px(6), ty - px(2)); }
+  // Too dense for the hours? List the day instead (only when the smart options are on).
+  const smart = (S.ambientHours ?? 0) > 0 || (S.breakHours ?? 0) > 0;
+  if (smart && (hourH < px(30) || Math.max(...laid.map((t) => t.lanes)) > 6)) { drawDayList(ctx, span, key, x, cy, w, bottom - px(6)); return; }
+
+  const hourLabel = (hr) => (hr === 0 ? '12 AM' : hr < 12 ? `${hr} AM` : hr === 12 ? 'Noon' : `${hr - 12} PM`);
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = BLACK;
+  for (const r of rows) {
+    if (r.hr !== undefined) {
+      ctx.fillStyle = BLACK; ctx.fillRect(bx0, r.y, bw, 1); ctx.fillRect(bx0, r.y, 1, hourH);
+      ctx.font = F.regular(11); ctx.fillText(hourLabel(r.hr), x + px(2), r.y + px(11));
+    } else { // a folded break: a dotted line across, with the hours it hides
+      ctx.fillStyle = BLACK; ctx.fillRect(bx0, r.y, bw, 1);
+      const mid = r.y + breakH / 2, dot = Math.max(2, px(1.6));
+      for (let dx = px(10); dx < bw; dx += dot * 3) ctx.fillRect(bx0 + dx, mid - dot / 2, dot, dot);
+      for (let dy = dot; dy < breakH; dy += dot * 3) ctx.fillRect(bx0, r.y + dy, 1, dot);
+      const label = `${hourLabel(r.from)} – ${hourLabel(r.to)}`;
+      ctx.font = F.regular(11);
+      const tw = ctx.measureText(label).width + px(16), tx = bx0 + (bw - tw) / 2;
+      ctx.fillStyle = WHITE; ctx.fillRect(tx, r.y + px(3), tw, breakH - px(6));
+      ctx.fillStyle = BLACK; ctx.fillText(label, tx + px(8), mid + px(4));
+      ctx.fillText('⋮', x + px(14), mid + px(5));
+    }
   }
+  ctx.fillRect(bx0, areaEnd, bw, 1);
+
+  // Overlapping events cascade, each lying over the earlier ones, with a thin white border around it so the edges read.
+  const right = bx0 + bw - px(2), left0 = bx0 + px(3);
+  const clusters = new Map();
+  for (const t of laid) clusters.set(t.cluster, [...(clusters.get(t.cluster) ?? []), t]);
+  for (const members of clusters.values()) {
+    const solo = members.length === 1;
+    const share = Math.max(px(90), (right - left0) / members[0].lanes); // the most any title claims: an equal column, so the worst case is columns
+    const items = members.map((t) => {
+      const top = yOf(t.s) + 1, bh = Math.max(px(24), yOf(t.e) - yOf(t.s) - 2), tall = bh > px(44);
+      ctx.font = F.bold(13); const titleW = ctx.measureText(t.ev.title).width;
+      ctx.font = F.regular(11); const timeW = tall ? ctx.measureText(timeLabel(t.ev, key).join(' ').replace('– ', '– ')).width : 0;
+      return { t, top, bh, bottom: top + bh, tall, zone: tall ? px(32) : px(19), textW: Math.min(Math.max(titleW, timeW) + px(16), share), right }; // a title claims at most its share of the width
+    });
+    const lefts = solo ? [left0] : cascade(items, { left0, right, indent: px(18), minW: share });
+    items.forEach((it, i) => { it.left = lefts[i]; });
+    // The text of a block runs only as far as the next block that starts within its title.
+    items.forEach((it, i) => {
+      it.limit = it.right - it.left - px(10);
+      items.slice(i + 1).forEach((o) => { if (o.top < it.top + it.zone && o.left > it.left) it.limit = Math.min(it.limit, o.left - it.left - px(8)); });
+    });
+    for (const it of items) {
+      const { ev } = it.t, ink = ev.cal.color, wide = it.right - it.left;
+      const r = px(5); // rounded corners, and the white border around an overlapping block follows them
+      if (!solo) { ctx.fillStyle = WHITE; roundedRect(ctx, it.left - px(2), it.top - px(2), wide + px(4), it.bh + px(4), r + px(2)); ctx.fill(); }
+      ctx.fillStyle = INK[ink]; roundedRect(ctx, it.left, it.top, wide, it.bh, r); ctx.fill();
+      if (outlined(ink)) { ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); roundedRect(ctx, it.left, it.top, wide, it.bh, r); ctx.stroke(); }
+      ctx.fillStyle = ON[ink];
+      let ty = it.top + px(15);
+      if (it.tall) { ctx.font = F.regular(11); drawText(ctx, fit(ctx, timeLabel(ev, key).join(' ').replace('– ', '– '), F.regular(11), it.limit), it.left + px(6), ty - px(1)); ty += px(15); }
+      if (solo) {
+        const lines = wrap(ctx, ev.title, F.bold(13), it.limit, Math.max(1, Math.min(3, Math.floor((it.bh - px(6)) / px(16)) - (it.tall ? 1 : 0))));
+        ctx.font = F.bold(13);
+        lines.forEach((l) => { drawText(ctx, l, it.left + px(6), ty); ty += px(16); });
+        if (ev.location && ty + px(10) < it.top + it.bh) { ctx.font = F.regular(11); drawText(ctx, fit(ctx, ev.location, F.regular(11), it.limit), it.left + px(6), ty - px(2)); }
+      } else {
+        ctx.font = F.bold(13);
+        drawText(ctx, fit(ctx, ev.title, F.bold(13), it.limit), it.left + px(6), ty);
+      }
+    }
+  }
+}
+
+/** The day as a list in time order, for a day too busy for the hours: a color bar, the start time and the title; "+N more" if it overflows. */
+function drawDayList(ctx, span, key, x, top, w, bottom) {
+  // Rows are 27 units tall, squeezed down to 20 to fit the whole day if that is enough; beyond that the rest is "+N more".
+  const rowH = Math.max(px(20), Math.min(px(27), (bottom - top) / span.length));
+  const room = Math.max(1, Math.floor((bottom - top) / rowH)), shown = span.length > room ? room - 1 : span.length;
+  span.slice(0, shown).forEach(({ ev }, i) => {
+    const ry = top + i * rowH, ink = ev.cal.color;
+    ctx.fillStyle = INK[ink]; ctx.fillRect(x, ry + px(2), px(5), rowH - px(4));
+    if (outlined(ink)) { ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); ctx.strokeRect(x, ry + px(2), px(5), rowH - px(4)); }
+    const base = ry + rowH / 2 + px(5);
+    ctx.fillStyle = BLACK; ctx.font = F.bold(14);
+    const [t1] = timeLabel(ev, key);
+    drawText(ctx, fit(ctx, t1, F.bold(14), px(86)), x + px(14), base);
+    ctx.font = F.regular(15);
+    drawText(ctx, fit(ctx, ev.title, F.regular(15), w - px(14) - px(96)), x + px(14) + px(92), base);
+  });
+  if (shown < span.length) { ctx.fillStyle = BLACK; ctx.font = F.bold(14); ctx.fillText(`+${span.length - shown} more`, x + px(14), top + shown * rowH + rowH / 2 + px(5)); }
 }
 
 function timelineLayout(ctx, model, { w, h, S }) {

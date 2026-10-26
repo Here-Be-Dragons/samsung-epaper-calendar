@@ -145,7 +145,7 @@ export function drawText(ctx, text, x, y) {
   for (let i = 0; i < 3; i++) ctx.fillRect(x0 + i * (e.dot + e.gap), y0 - e.dot, e.dot, e.dot);
 }
 
-/** Wraps text into at most `maxLines` lines of `maxW`, ending the last one with an ellipsis if cut. */
+/** Wraps text into at most `maxLines` lines of `maxW`; if it does not all fit, the last line is filled with as much as fits and ends with the ellipsis. */
 export function wrap(ctx, text, font, maxW, maxLines) {
   const words = text.split(/\s+/).filter(Boolean);
   const lines = [];
@@ -155,7 +155,7 @@ export function wrap(ctx, text, font, maxW, maxLines) {
     if (line && width(ctx, next, font) > maxW) {
       lines.push(line);
       line = words[i];
-      if (lines.length === maxLines) { line = ''; words.length = i; lines[lines.length - 1] = fit(ctx, `${lines[lines.length - 1]} ${words.slice(i).join(' ')}…`, font, maxW); break; }
+      if (lines.length === maxLines) { line = ''; lines[lines.length - 1] = fit(ctx, `${lines[lines.length - 1]} ${words.slice(i).join(' ')}`, font, maxW); break; } // out of lines: the rest is cut to fill this one
     } else line = next;
   }
   if (line && lines.length < maxLines) lines.push(fit(ctx, line, font, maxW));

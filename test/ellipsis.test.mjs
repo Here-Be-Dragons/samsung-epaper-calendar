@@ -50,3 +50,14 @@ test('the timeline puts events that overlap on the page side by side, even if th
   assert.deepEqual(byName(assignLanes(span, 0)), { niran: [0, 1], ava: [0, 2], meeting: [1, 2] }, 'by true times Niran stands alone');
   assert.deepEqual(byName(assignLanes(span, 24)), { niran: [0, 2], ava: [1, 2], meeting: [0, 2] }, 'by drawn extent they share the width, Meeting under Niran');
 });
+
+test('when wrap runs out of lines, the last one is filled to the width, not cut at an earlier word', () => {
+  const c = createCanvas(10, 10), ctx = c.getContext('2d'), font = F.bold(13), maxW = 220;
+  const one = wrap(ctx, 'Ava math Olympics mtg', font, maxW, 1);
+  assert.equal(one.length, 1);
+  assert.ok(one[0].endsWith('…') && one[0].length > 'Ava math…'.length, `fills the line: ${one[0]}`);
+  const w = (t) => { ctx.font = font; return ctx.measureText(t.replace(/…$/, '')).width; };
+  assert.ok(w(one[0]) <= maxW, 'and still fits');
+  assert.deepEqual(wrap(ctx, 'Short', font, maxW, 1), ['Short']);
+  assert.equal(wrap(ctx, 'Two lines of words that need more room than one', font, 120, 2).length, 2);
+});

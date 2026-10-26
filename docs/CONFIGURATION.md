@@ -28,7 +28,15 @@ Pick one with `LAYOUT` (or `DISPLAY_<ID>_LAYOUT`, or the **Layout** selector in 
 | Layout | What it is |
 |---|---|
 | `paper` (default) | A printed wall calendar: colored weekday band, boxed days, red Sundays and holidays, then today's agenda and the shopping list. |
-| `timeline` | A compact month (shorter rows: all-day bars first, then as many timed titles as fit, then a colored dot for each one that does not), then today hour by hour (blocks sized by duration, overlaps side by side) beside Coming up and the shopping list. |
+| `timeline` | A compact month (shorter rows: all-day bars first, then as many timed titles as fit, then a colored dot for each one that does not), then today hour by hour (blocks sized by duration, overlaps side by side) beside Coming up and the shopping list. See below for long and crowded days. |
+
+**A long or crowded day in the timeline.** The hour-by-hour view stays readable in four ways:
+- A timed event as long as `TIMELINE_AMBIENT_HOURS` (default 24: a whole day, such as a 24/7 gym) is shown as an all-day chip above the hours, like Google Calendar does. It does not stretch the hours or take lane width. A long event shorter than that stays a block.
+- Overlapping events cascade, as in Google Calendar, instead of splitting the width into equal columns: each event lies over the earlier ones with a thin white border, reaches the right edge, and starts a little to the right of the event it overlaps. If it begins within that event's title it starts just past the end of the title, so it never covers text; if it begins below the title it covers more of the event. Titles are clipped where the next event begins.
+- A run of `TIMELINE_BREAK_HOURS` (default 3) or more empty hours is folded into one thin break row (`1 AM - 9 AM`), so the busy part of the day keeps its height. An hour is empty if no event overlaps it.
+- If the hours still cannot be drawn legibly (an hour would be under about 54 px, or more than six events overlap at once), today is listed in time order instead, with every event on its own line (squeezed to fit; "+N more" only past about two dozen).
+
+Set either setting to 0 to turn it off; with both at 0 the day is always drawn as hours. An event that ends exactly at midnight runs to the end of the day.
 
 Red day numbers mark Sundays, and the days of any calendar with `mark_days: true` (`CALENDAR_<ID>_MARK_DAYS=true`;
 use it for a holidays calendar).

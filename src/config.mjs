@@ -75,6 +75,13 @@ export const TEXT_MODES = ['panel', 'threshold', 'dither'];
 export const TEXT_AA = (process.env.TEXT_AA || 'panel').toLowerCase();
 if (!TEXT_MODES.includes(TEXT_AA)) throw new Error(`TEXT_AA must be one of ${TEXT_MODES.join(', ')}`);
 export const TEXT_CUT = Math.min(0.95, Math.max(0.05, Number(process.env.TEXT_CUT) || 0.4));
+// Timeline layout, so a long or crowded day stays readable. A timed event this many hours long or more (a 24/7 gym: a whole day) is
+// shown as an all-day chip instead of a block that stretches the hours (default 24; 0: every event is a block).
+export const TIMELINE_AMBIENT_HOURS = Math.max(0, int('TIMELINE_AMBIENT_HOURS', 24));
+// A run of this many empty hours or more is folded into one thin break, so a quiet stretch does not squeeze the busy part of the day
+// (default 3; 0: every hour is drawn). If the hours still cannot be drawn legibly, the day is listed in time order instead
+// (that fallback is on while either setting is above 0).
+export const TIMELINE_BREAK_HOURS = Math.max(0, int('TIMELINE_BREAK_HOURS', 3));
 export const JPEG_QUALITY = int('JPEG_QUALITY', 100);
 
 // --- HTTP server -------------------------------------------------------------

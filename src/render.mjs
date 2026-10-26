@@ -30,7 +30,7 @@ const quantizerFor = (art, text, alphaCut) => {
  * of `model.today` (auto, none, or a theme name; `plan` holds the months, holiday windows and custom themes). Frames
  * render one at a time because px() reads the current geometry.
  */
-export function render(model, { geometry, layout = DEFAULT_LAYOUT, theme = config.THEME, plan = config.THEME_PLAN, art: artMode = config.ART_DITHER, font = config.FONT, text: textMode = config.TEXT_AA, textCut = config.TEXT_CUT }) {
+export function render(model, { geometry, layout = DEFAULT_LAYOUT, theme = config.THEME, plan = config.THEME_PLAN, art: artMode = config.ART_DITHER, font = config.FONT, text: textMode = config.TEXT_AA, textCut = config.TEXT_CUT, breakHours = config.TIMELINE_BREAK_HOURS, ambientHours = config.TIMELINE_AMBIENT_HOURS }) {
   const draw = LAYOUTS[layout];
   if (!draw) throw new Error(`Unknown layout "${layout}"`);
   if (!config.TEXT_MODES.includes(textMode)) throw new Error(`Unknown text mode "${textMode}". Available: ${config.TEXT_MODES.join(', ')}`);
@@ -46,6 +46,8 @@ export function render(model, { geometry, layout = DEFAULT_LAYOUT, theme = confi
     dressContext(ctx);
     const S = styleFor(resolveTheme(theme, model.today, plan), art);
     S.plan = plan;
+    S.breakHours = breakHours;
+    S.ambientHours = ambientHours;
     S.images = S.theme ? await loadThemeArt(S.theme.name, { month: MONTH_KEYS[Number(model.today.slice(5, 7)) - 1] }) : null; // your own PNGs for this theme, if any
     useMotifImages(S.images?.motifs);
     draw(ctx, model, { w, h, S });
