@@ -1,8 +1,8 @@
 # Copy to config/config.yaml and edit. config/config.yaml is git-ignored (and kept out of the Docker image):
 # it holds your private calendar links. In Docker the config/ folder is mounted at /config (see docker-compose.yml).
 #
-# This file holds the lists: any number of calendars, and optionally several displays. Everything else
-# (time zone, redraw mode, themes, MQTT, shopping list) stays in .env; see .env.example.
+# This file holds the lists: any number of calendars, optionally several displays, and your theme schedule and
+# themes. Everything else (time zone, redraw mode, MQTT, shopping list) stays in .env; see .env.example.
 # JSON works too (config.json): YAML is a superset of it.
 
 calendars:
@@ -39,3 +39,25 @@ calendars:
 #     host: 192.168.1.124
 #     rotation: 180
 #     layout: timeline
+
+# Optional. Which theme when: each month wears its own design, and a holiday theme replaces it only around the holiday.
+# These are the defaults you can change; see docs/CONFIGURATION.md ("Themes") for the built-in months and windows.
+# themes:
+#   months:                      # a month's design: a theme name, or none (no theme at all that month, holidays included)
+#     oct: october-night
+#   windows:                     # your holiday windows, every year; the first match wins, yours before the built-in ones
+#     - { from: easter-7, to: easter+1, theme: easter }   # MM-DD, or easter / thanksgiving with an offset in days
+#     - { from: 10-24, to: 10-31, theme: halloween }
+#   builtin_windows: true        # false: only your windows
+#   marks:                       # a decorated day cell on a date, every year, in any theme
+#     "05-14": { motif: star, tint: "#fff3c4", deco: ["#f5b700"] }
+#   custom:                      # your own themes
+#     october-night:
+#       extends: halloween       # start from a built-in or earlier custom theme (optional)
+#       chrome: "#3b2a5a"        # weekday band and panel titles (dark: white text sits on it)
+#       sky: ["#1b1033", "#4a2d7a"]                      # banner and footer gradient, top to bottom
+#       pattern: { kind: stars, colors: ["#ffffff", "#ffd93d"], size: 6, density: 1200 }
+#       ground: { kind: hills, colors: ["#2a1a40", "#1c1030"], height: 0.3 }
+#       motifs: [pumpkin, ghost, bat, moon]              # the large pictures in the header
+#       holidays:
+#         "10-31": { motif: pumpkin, tint: "#ffe0b0", deco: ["#ff8a1f"] }

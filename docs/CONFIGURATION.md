@@ -10,7 +10,7 @@ learned about the panel itself, see [PROTOCOL.md](../PROTOCOL.md); for the diagn
 - **Header:** today's full date on one line, and a legend of your calendars with their colors.
 - **Month grid (Sunday first):** each event is just its title. All-day and multi-day events are
   colored bars that run across the days, carry on into the next week with ◂ ▸ arrows, and stack in
-  lanes when they overlap. Timed events are a colored square plus the title, filling the free rows
+  lanes when they overlap. Timed events are the title in black beside a thin bar in the calendar's color, filling the free rows
   of the day. Anything that does not fit becomes "+N more". Today has a yellow band across its date and a heavy black frame.
 - **Today's agenda:** time, title, then whichever of these the event has: **Where** (location),
   **Video** (Meet, Zoom, Teams link), **With** (organizer and guests, leaving you out), **Notes**
@@ -28,7 +28,7 @@ Pick one with `LAYOUT` (or `DISPLAY_<ID>_LAYOUT`, or the **Layout** selector in 
 | Layout | What it is |
 |---|---|
 | `paper` (default) | A printed wall calendar: colored weekday band, boxed days, red Sundays and holidays, then today's agenda and the shopping list. |
-| `timeline` | A compact month (a colored dot per timed event), then today hour by hour (blocks sized by duration, overlaps side by side) beside Coming up and the shopping list. |
+| `timeline` | A compact month (shorter rows: all-day bars first, then as many timed titles as fit, then a colored dot for each one that does not), then today hour by hour (blocks sized by duration, overlaps side by side) beside Coming up and the shopping list. |
 
 Red day numbers mark Sundays, and the days of any calendar with `mark_days: true` (`CALENDAR_<ID>_MARK_DAYS=true`;
 use it for a holidays calendar).
@@ -38,33 +38,99 @@ use it for a holidays calendar).
 A theme dresses the frame around the calendar, in full color: a **scenic banner** behind the date (sky
 gradient, scattered pattern, rolling ground, big and small motifs), a **scenic footer** that holds the
 calendar legend, a **colored weekday band and panel headers** with a motif, and a **tinted, decorated
-background on real holiday dates** (a pastel Easter Sunday with a bunny, a Christmas Day tree). The date and
-legend sit on white plates. **The calendar boxes stay white**, and event text, bars and gridlines stay in the
+background on real holiday dates** (a pastel Easter Sunday with a bunny, a Christmas Day tree). The date is
+centered on the banner with a white outline, and the legend sits on a white plate. **The calendar boxes stay white**, and event text, bars and gridlines stay in the
 panel's six pure inks so they read cleanly.
 
 Theme colors are not limited to the six inks: the art is full color, and the six inks are mixed into each color by
 dithering, by the panel by default or by the server if you choose (see "How the picture is made"). Only the core components (text, lines, bars,
 highlights) are in the pure inks. Up close it reads as a pattern, so judge the look on the panel, not on screen.
 
-| Month | Default theme | | Month | Default theme |
-|---|---|---|---|---|
-| January | `winter` (snowflakes, snowmen) | | July | `patriotic` (stars, fireworks) |
-| February | `valentine` (hearts, flowers) | | August | `summer` |
-| March | `shamrock` (St. Patrick's) | | September | `school` (apples, pencils) |
-| April | `easter` (eggs, bunnies) | | October | `halloween` (pumpkins, ghosts, bats) |
-| May | `spring` (flowers) | | November | `autumn` (leaves, pumpkins) |
-| June | `summer` (sun, waves) | | December | `christmas` (trees, candy canes, gifts) |
+**Which theme when.** A month wears its own design, and a holiday theme replaces it only around the holiday:
 
-- `THEME=auto` (the default) follows that table. `THEME=none` turns theming off. `THEME=easter` (any theme
+| Month | Design | | Month | Design |
+|---|---|---|---|---|
+| January | `january` (snow, snowmen) | | July | `summer` (sun, waves) |
+| February | `february` (frosty pink and lavender) | | August | `august` (late-summer gold) |
+| March | `march` (green hills, rainbows) | | September | `school` (apples, pencils) |
+| April | `april` (rain-washed spring) | | October | `autumn` (leaves, pumpkins) |
+| May | `spring` (flowers, butterflies) | | November | `november` (brown leaves, acorns) |
+| June | `june` (sunny meadow) | | December | `december` (snowy night, stars) |
+
+| Holiday window (every year) | Theme |
+|---|---|
+| Feb 7 to 14 | `valentine` (hearts, flowers) |
+| Mar 10 to 17 | `shamrock` (St. Patrick's) |
+| the week before Easter to the day after | `easter` (eggs, bunnies) |
+| Jun 28 to Jul 5 | `patriotic` (stars, fireworks) |
+| Oct 24 to 31 | `halloween` (pumpkins, ghosts, bats) |
+| the Sunday before Thanksgiving to Thanksgiving | `autumn` |
+| Dec 12 to 26 | `christmas` (trees, candy canes, gifts) |
+
+The other built-in theme is `winter`. A holiday's own decorated cell (the bunny on Easter Sunday, a tree on Christmas Day) appears
+in whatever design that month wears.
+
+- `THEME=auto` (the default) follows the date as above. `THEME=none` turns theming off. `THEME=easter` (any theme
   name) uses one theme all year.
-- **Choose per month** with `THEME_JAN` ... `THEME_DEC`: a theme name, or `none` for a plain month.
-  For example `THEME_APR=spring` and `THEME_OCT=none`.
 - Per display: `DISPLAY_<ID>_THEME`. In Home Assistant the **Theme** selector (auto, none, or a name) overrides
   everything until you set it back to auto; **Active theme** shows what is drawn now.
 - `/preview?theme=easter&now=2026-04-05T12:00:00Z` shows any theme on any date without touching the panel.
 
-The theme changes at the turn of the month, which is one more reason the picture changes at midnight. Themes live
-in `src/themes.mjs`: adding one is a chrome color, a list of motifs and its holiday marks.
+### Your own themes and schedule
+
+The `themes:` section of the config file sets all of it. Everything is optional:
+
+```yaml
+themes:
+  months:                        # which design each month wears: a theme name, or none (no theme at all that month)
+    oct: october-night
+  windows:                       # your holiday windows, every year; the first match wins, yours before the built-in ones
+    - { from: easter-7, to: easter+1, theme: easter }   # MM-DD, or easter / thanksgiving with an offset in days
+    - { from: 10-24, to: 10-31, theme: halloween }
+  builtin_windows: true          # false: only your windows
+  marks:                         # a decorated day cell on a date, every year, in any theme
+    "05-14": { motif: star, tint: "#fff3c4", deco: ["#f5b700"] }
+  custom:                        # your own themes
+    october-night:
+      extends: halloween         # start from a built-in or earlier custom theme (optional)
+      chrome: "#3b2a5a"          # weekday band and panel titles (dark, as white text sits on it)
+      sky: ["#1b1033", "#4a2d7a"]                       # banner and footer gradient, top to bottom
+      pattern: { kind: stars, colors: ["#ffffff", "#ffd93d"], size: 6, density: 1200 }
+      ground: { kind: hills, colors: ["#2a1a40", "#1c1030"], height: 0.3 }
+      motifs: [pumpkin, ghost, bat, moon]               # the large pictures in the header; [bat, 2] picks a variant
+      holidays:
+        "10-31": { motif: pumpkin, tint: "#ffe0b0", deco: ["#ff8a1f"] }
+```
+
+| Key of a custom theme | Meaning |
+|---|---|
+| `extends` | a theme to start from; anything you do not set comes from it |
+| `chrome` | one dark color, for the weekday band, panel titles and the line under the banner |
+| `sky` | two colors, the banner and footer gradient from top to bottom |
+| `pattern` | `kind` (`dots`, `confetti`, `snow`, `stars`, `hearts`, `leaves`, `clover`, `lines`), `colors`, `size`, `density` (pixels² per shape: smaller is busier); `null` for none |
+| `ground` | `kind` (`hills`, `snow`, `waves`, `stripes`), `colors`, `height` (a fraction of the banner); `null` for none |
+| `motifs` | the pictures along the header and footer: names from the list in [themes/README.md](../themes/README.md), each optionally `[name, variant]` |
+| `holidays` | decorated day cells for this theme: a date (`MM-DD`, `easter+0`, `thanksgiving`) mapped to `motif`, `tint`, `deco` (a few speckle colors) and optional `speckle: stars` |
+
+**What a theme's colors change, and what they do not.** The colors cover the scenery: the weekday and panel-title color, the banner and
+footer gradient, the scattered pattern, the ground, and the holiday cell tints. The motifs are drawn pictures with their own colors (an
+orange pumpkin, a white ghost, each with a black outline so it sits on any sky), and a theme chooses which ones appear but does not
+recolor them. If you want a specific look for one, draw it as a PNG (below); a few motifs (eggs, flowers, hearts) also have colored
+`[name, variant]` versions.
+
+### Your own art
+
+Draw PNGs for a theme's header banner, footer strip and individual motifs, and they replace the generated ones: put
+`header.png` (1440 x 227 px) and `footer.png` (1440 x 112 px) in `themes/<theme>/`, small square `motifs/<name>.png`
+files beside them. A folder named for a theme (`halloween`), for a month (`oct`: any theme in October that has no folder of its own), or `default` (any theme at all) is used, in that order. `npm run art-guides` writes guide pictures at your panel's
+size with the parts the date and legend plates will cover marked. The date (centered, with a white outline) and the legend (on a white plate) are still drawn over it,
+and the weekday band keeps the theme's color. Art in `themes/` ships in the Docker image; art in `config/themes/` is
+picked up from the mounted folder without a rebuild, and changes show on the next refresh. The names, sizes and rules
+are in [themes/README.md](../themes/README.md).
+
+The theme can change on any day (when a holiday window starts or ends, as well as at the turn of the month), which is one more
+reason the picture changes at midnight. The built-in themes live in `src/themes.mjs`: a chrome color, a sky, a pattern, a ground and
+a list of motifs.
 
 ## Previewing without a panel
 
@@ -351,6 +417,6 @@ Linux host on the same network.
   who can reach the port. Keep it on a trusted network. Anyone who can publish to your MQTT broker can
   control the display the same way.
 - **What is verified:** the panel behavior described here was measured on one EM32DX and is written up, with what is still unknown, in [PROTOCOL.md](../PROTOCOL.md). Everything is also tested against a fake panel that speaks the real protocol, and the MQTT side against a Mosquitto broker.
-- **Long titles** are cut with an ellipsis in the month grid (about 12 characters per day); the
+- **Long titles** are cut with a compact ellipsis (three small dots, about half the width of the font's own "…") in the month grid (about 12 characters per day); the
   agenda shows them in full, wrapped to two lines.
 - A feed can hold years of history; only the visible weeks and the next three weeks are expanded.

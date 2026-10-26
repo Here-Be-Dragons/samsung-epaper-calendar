@@ -20,7 +20,7 @@ import * as config from './config.mjs';
 import { getModel, dayAgenda } from './calendar.mjs';
 import { render } from './render.mjs';
 import { LAYOUT_NAMES } from './layouts.mjs';
-import { THEME_NAMES, resolveTheme } from './themes.mjs';
+import { resolveTheme } from './themes.mjs';
 import { createController } from './controller.mjs';
 import { startMqtt } from './mqtt.mjs';
 import { geometryFor } from './geometry.mjs';
@@ -39,7 +39,7 @@ const displays = config.DISPLAYS;
 const displayById = new Map(displays.map((d) => [d.id, d]));
 const geometryOf = (d, overrides = {}) => geometryFor({ width: d.width, height: d.height, rotation: d.rotation, ...overrides });
 
-const THEME_SETTINGS = ['auto', 'none', ...THEME_NAMES];
+const THEME_SETTINGS = ['auto', 'none', ...config.THEME_PLAN.names];
 for (const d of displays) {
   if (!THEME_SETTINGS.includes(d.theme)) throw new Error(`Display "${d.id}": unknown theme "${d.theme}". Available: ${THEME_SETTINGS.join(', ')}`);
   if (!LAYOUT_NAMES.includes(d.layout)) throw new Error(`Display "${d.id}": unknown layout "${d.layout}". Available: ${LAYOUT_NAMES.join(', ')}`);
@@ -110,7 +110,7 @@ async function renderFor(display, { layout, theme }) {
       eventsToday: dayAgenda(model, model.today).length,
       shoppingOpen: model.shopping && !model.shopping.error ? model.shopping.items.filter((i) => !i.done).length : null,
       feedsOk: model.calendars.every((c) => c.ok),
-      themeActive: resolveTheme(theme, Number(model.today.slice(5, 7)), config.THEME_MONTHS)?.name ?? 'none',
+      themeActive: resolveTheme(theme, model.today, config.THEME_PLAN)?.name ?? 'none',
     },
   };
 }

@@ -34,7 +34,7 @@ User docs: `README.md`, `docs/CONFIGURATION.md`. What is known about the panel: 
   day key (all-day). Do not "simplify" this back to raw `rrule` dates; `test/calendar.test.mjs` pins the behavior.
 - Day math uses day keys (`YYYY-MM-DD`, `src/dates.mjs`), never instants plus 86400000. All-day dates from
   node-ical are local-midnight Dates of the *machine's* zone, hence `dateOnlyKey`.
-- Frames render one at a time (`render()` queues), because `px()` reads the current geometry.
+- Frames render one at a time (`render()` queues), because `px()` reads the current geometry (and `useFont` and `useMotifImages` set per-frame state the same way).
 
 ## Layout of the code
 
@@ -42,7 +42,8 @@ User docs: `README.md`, `docs/CONFIGURATION.md`. What is known about the panel: 
   YAML/JSON config file that holds the `calendars` and `displays` lists (`${VAR}` interpolation, strict keys, errors that
   never print a link; `config/config.example.yaml`); the old CALENDARS / DISPLAYS variables remain the fallback; `src/calendar.mjs` fetching
   (http(s) or a local file), expansion, `buildMonth`, `dayAgenda`, `upcomingDays`; `src/draw.mjs` the drawing parts
-  (header, month grid, agenda, coming up, shopping); `src/themes.mjs` the monthly themes and their motifs;
+  (header, month grid, agenda, coming up, shopping); `src/themes.mjs` the themes (a design per month, holiday themes, motifs), `buildThemePlan` (your `themes:` settings: months, holiday windows, custom themes) and `resolveTheme` (by date); `src/themeArt.mjs` loads the user's own header/footer/motif PNGs
+  (`themes/`, `config/themes/`, `THEMES_DIR`) that replace the generated scenery, and `scripts/art-template.mjs` makes the guides to draw them over;
   `src/layouts.mjs` the two layouts (paper, timeline) built from those parts; `src/render.mjs` frame + encoding;
   `src/controller.mjs` change detection, redraw pending, auto/manual mode, the optional state file; `src/mqtt.mjs`
   Home Assistant discovery, state and commands; `src/shopping.mjs` the list sources; `src/server.mjs` displays,
@@ -67,8 +68,9 @@ User docs: `README.md`, `docs/CONFIGURATION.md`. What is known about the panel: 
   (gradient sky, scattered pattern, ground: hills/snow/waves/stripes), motifs (`strip`) and holiday `marks` that
   tint and decorate that day's cell (Easter by computus, Thanksgiving as 4th Thursday). A themed frame reserves a
   taller header (`headerH`) and a footer (`footerH`) that holds the legend; layouts must use those, not
-  constants. `THEME=auto` maps month -> theme (`MONTH_THEMES`), overridden by `THEME_JAN`..`THEME_DEC`; HA's Theme
-  select overrides all. The theme is resolved from the month of `model.today`, so the picture changes at the month turn.
+  constants. `THEME=auto` resolves by the date of `model.today`: a holiday window (`BUILTIN_WINDOWS`, plus the config's) if one
+  holds it, else the month's design (`MONTH_THEMES`, overridden by the config's `themes.months` or `THEME_JAN`..`THEME_DEC`); HA's
+  Theme select overrides all. Holiday cell decorations (`marks`) are independent of the theme: every built-in one shows in any design.
 - Month grid: bars (all-day or multi-day) get lanes across a week; timed single-day events fill the rows each
   day's bars leave free; overflow is "+N more". Cell capacity comes from the row height.
 - Keep the drawing parts in `draw.mjs` free of data logic.

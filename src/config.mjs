@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { findConfigFile, parseConfigText, calendarsFromFile, displayEntriesFromFile, CALENDAR_INKS } from './configFile.mjs';
-import { MONTH_KEYS, THEME_NAMES, isThemeSetting } from './themes.mjs';
+import { MONTH_KEYS, buildThemePlan } from './themes.mjs';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -123,14 +123,14 @@ export const CALENDARS = fileData.calendars !== undefined ? calendarsFromFile(fi
 export const LAYOUT = (process.env.LAYOUT || 'paper').toLowerCase();
 
 // --- Theme -----------------------------------------------------------------------------------------
-// auto (default): each month wears its own theme (see src/themes.mjs), overridden per month with
-// THEME_JAN ... THEME_DEC (a theme name, or "none"). none: no theming. A theme name: that theme all
-// year. Per display: DISPLAY_<ID>_THEME. Home Assistant can change it at run time.
+// auto (default): the theme follows the date: a holiday window (Easter week, Halloween, Christmas...) if one holds today, else the
+// month's own design. none: no theming. A theme name: that theme all year. Per display: DISPLAY_<ID>_THEME. Home Assistant can
+// change it at run time. The `themes:` section of the config file sets which theme each month wears (months), your own holiday
+// windows, and your own themes (custom); THEME_JAN ... THEME_DEC set a month's theme from the environment (the file wins).
 export const THEME = (process.env.THEME || 'auto').toLowerCase();
-export const THEME_MONTHS = MONTH_KEYS.map((m) => (process.env[`THEME_${m.toUpperCase()}`] || '').trim().toLowerCase());
-for (const [variable, name] of [['THEME', THEME], ...THEME_MONTHS.map((n, i) => [`THEME_${MONTH_KEYS[i].toUpperCase()}`, n])]) {
-  if (name && !isThemeSetting(name)) throw new Error(`${variable} must be auto, none, or one of ${THEME_NAMES.join(', ')} (got "${name}")`);
-}
+const envMonths = Object.fromEntries(MONTH_KEYS.map((m) => [m, (process.env[`THEME_${m.toUpperCase()}`] || '').trim().toLowerCase()]).filter(([, name]) => name));
+export const THEME_PLAN = buildThemePlan({ ...fileData.themes, months: { ...envMonths, ...(fileData.themes?.months ?? {}) } }, configPath ? `${configPath}: themes` : 'themes');
+if (THEME !== 'auto' && THEME !== 'none' && !THEME_PLAN.names.includes(THEME)) throw new Error(`THEME must be auto, none, or one of ${THEME_PLAN.names.join(', ')} (got "${THEME}")`);
 
 // --- Home Assistant over MQTT ------------------------------------------------------------------
 // Set MQTT_URL (for example mqtt://192.168.1.10:1883) to publish status and accept commands, with

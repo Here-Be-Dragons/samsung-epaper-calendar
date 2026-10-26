@@ -108,3 +108,23 @@ test('without a file the environment variables still work', () => {
   assert.deepEqual(loadConfig(env, empty, '(c) => ({ file: c.CONFIG_FILE, cals: c.CALENDARS.map((x) => [x.id, x.color]), displays: c.DISPLAYS.map((d) => [d.id, d.host]) })'),
     { file: '', cals: [['a', 'blue'], ['b', 'black']], displays: [['one', '10.0.0.9']] });
 });
+
+test('the themes section of the file sets months, windows and custom themes, and THEME can name a custom one', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cfg-'));
+  fs.writeFileSync(path.join(dir, 'config.yaml'), `
+calendars:
+  - { id: a, url: a.ics }
+themes:
+  months: { apr: spring }
+  windows:
+    - { from: 04-20, to: 04-22, theme: night }
+  custom:
+    night: { extends: halloween, chrome: "#3b2a5a", motifs: [moon, bat] }
+`);
+  const env = { CONFIG_FILE: path.join(dir, 'config.yaml'), THEME_MAY: 'august', THEME_APR: 'march', THEME: 'night' };
+  const pick = '(c) => ({ theme: c.THEME, names: c.THEME_PLAN.names.slice(-1), apr: c.THEME_PLAN.months[3], may: c.THEME_PLAN.months[4], windows: c.THEME_PLAN.windows.slice(0, 1) })';
+  assert.deepEqual(loadConfig(env, dir, pick), { theme: 'night', names: ['night'], apr: 'spring', may: 'august', windows: [{ from: '04-20', to: '04-22', theme: 'night' }] }, 'the file wins over THEME_APR; THEME_MAY still applies');
+  assert.throws(() => loadConfig({ ...env, THEME: 'nope' }, dir, pick), /THEME must be auto, none, or one of/);
+  fs.writeFileSync(path.join(dir, 'bad.yaml'), 'calendars:\n  - { id: a, url: a.ics }\nthemes:\n  months: { apr: nothere }\n');
+  assert.throws(() => loadConfig({ CONFIG_FILE: path.join(dir, 'bad.yaml') }, dir, pick), /themes\.months\.apr: "nothere" is not a theme/);
+});

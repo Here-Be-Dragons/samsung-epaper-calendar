@@ -318,8 +318,19 @@ const MOTIFS = {
 
 export const MOTIF_NAMES = Object.keys(MOTIFS);
 
+// Pictures to draw instead of a generated motif (your own PNGs, see themeArt.mjs). Set per frame by the renderer, like
+// the geometry: frames render one at a time.
+let motifImages = new Map();
+export const useMotifImages = (images) => { motifImages = images ?? new Map(); };
+
 /** Draws a motif centered on (x, y) within a box of size s; `variant` picks its colors or pattern. */
 export function drawMotif(ctx, name, x, y, s, variant = 0) {
+  const image = motifImages.get(name);
+  if (image) { // your own picture, fitted into the box
+    const k = s / Math.max(image.width, image.height);
+    ctx.drawImage(image, x - (image.width * k) / 2, y - (image.height * k) / 2, image.width * k, image.height * k);
+    return;
+  }
   const draw = MOTIFS[name];
   if (!draw) return;
   ctx.save();
@@ -509,34 +520,236 @@ export const THEMES = {
     }),
   },
 };
+// The twelve month designs (a month wears one unless a holiday window or your settings say otherwise). May, July, September and
+// October use the spring, summer, school and autumn themes above.
+Object.assign(THEMES, {
+  january: {
+    label: 'January', chrome: '#27508F', bg: ['#7FA9DC', '#EAF3FC'],
+    pattern: { kind: 'snow', colors: ['#FFFFFF'], size: 6, density: 1100 }, ground: { kind: 'snow', colors: ['#C9DCEF', '#FFFFFF'], height: 0.34 },
+    strip: [['snowflake', 0], ['snowman', 0], ['star', 0], ['snowflake', 1]],
+  },
+  february: {
+    label: 'February', chrome: '#6A4C93', bg: ['#D9C8F0', '#FFEAF3'],
+    pattern: { kind: 'snow', colors: ['#FFFFFF', '#FFC1D6'], size: 6, density: 1300 }, ground: { kind: 'snow', colors: ['#E9DDF7', '#FFFFFF'], height: 0.3 },
+    strip: [['snowflake', 1], ['heart', 1], ['star', 1], ['heart', 0]],
+  },
+  march: {
+    label: 'March', chrome: '#2D7D6B', bg: ['#BFE3EC', '#F3FBE6'],
+    pattern: { kind: 'dots', colors: ['#FFFFFF', '#CDE9B0'], size: 8, density: 1400 }, ground: { kind: 'hills', colors: ['#B4DE8A', '#7FBF5C'], height: 0.34 },
+    strip: [['tulip', 0], ['rainbow', 0], ['sun', 0], ['butterfly', 0]],
+  },
+  april: {
+    label: 'April', chrome: '#3C7D9E', bg: ['#B5D6EF', '#EAF6F8'],
+    pattern: { kind: 'dots', colors: ['#FFFFFF', '#9CC9F0'], size: 7, density: 1100 }, ground: { kind: 'hills', colors: ['#9BD36F', '#6BB552'], height: 0.36 },
+    strip: [['tulip', 1], ['flower', 0], ['rainbow', 0], ['butterfly', 1], ['tulip', 2]],
+  },
+  june: {
+    label: 'June', chrome: '#2E7D32', bg: ['#9FDBFF', '#FFF6C9'],
+    pattern: { kind: 'dots', colors: ['#FFFFFF'], size: 8, density: 3500 }, ground: { kind: 'hills', colors: ['#8ED36B', '#4CAF50'], height: 0.36 },
+    strip: [['sun', 0], ['butterfly', 2], ['flower', 3], ['beachball', 0], ['flower', 1]],
+  },
+  august: {
+    label: 'August', chrome: '#B26A00', bg: ['#FFD08A', '#FFF1D2'],
+    pattern: { kind: 'dots', colors: ['#FFFFFF', '#FFE29A'], size: 8, density: 3000 }, ground: { kind: 'hills', colors: ['#E6B84F', '#C98A2B'], height: 0.34 },
+    strip: [['sun', 1], ['palm', 0], ['beachball', 0], ['butterfly', 2]],
+  },
+  november: {
+    label: 'November', chrome: '#6D4C2B', bg: ['#D9C3A0', '#F5ECDD'],
+    pattern: { kind: 'leaves', colors: ['#B3501B', '#8D6E3F', '#C98A2B'], size: 10, density: 1800 }, ground: { kind: 'hills', colors: ['#8B5A2B', '#5E3B1C'], height: 0.32 },
+    strip: [['acorn', 0], ['leaf', 1], ['pumpkin', 0], ['leaf', 2]],
+  },
+  december: {
+    label: 'December', chrome: '#1F3F7A', bg: ['#13306A', '#4A78C0'],
+    pattern: { kind: 'stars', colors: ['#FFFFFF', '#FFE98A'], size: 6, density: 1800 }, ground: { kind: 'snow', colors: ['#D9E8F5', '#FFFFFF'], height: 0.32 },
+    strip: [['snowflake', 0], ['star', 0], ['tree', 2], ['gift', 0], ['snowflake', 1]],
+  },
+});
 for (const [name, t] of Object.entries(THEMES)) t.name = name;
 export const THEME_NAMES = Object.keys(THEMES);
-
-/** What each month wears unless THEME_<MON> says otherwise (January first). */
-export const MONTH_THEMES = ['winter', 'valentine', 'shamrock', 'easter', 'spring', 'summer', 'patriotic', 'summer', 'school', 'halloween', 'autumn', 'christmas'];
 export const MONTH_KEYS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+/** What each month wears unless a holiday window or your settings say otherwise (January first). */
+export const MONTH_THEMES = ['january', 'february', 'march', 'april', 'spring', 'june', 'summer', 'august', 'school', 'autumn', 'november', 'december'];
 
-/** A setting is valid if it is auto, none, or a theme name. */
-export const isThemeSetting = (s) => s === 'auto' || s === 'none' || Object.hasOwn(THEMES, s);
+// --- Dates: holiday windows and marks ----------------------------------------------------------------------
 
-/**
- * The theme to draw for a month (1-12): `setting` is auto (follow the month, with `overrides`, a
- * 12-item array of names or ''), none, or a theme name. Returns the theme or null for none.
- */
-export function resolveTheme(setting, month, overrides = []) {
-  let name = setting;
-  if (setting === 'auto') name = overrides[month - 1] || MONTH_THEMES[month - 1];
-  if (name === 'none' || !Object.hasOwn(THEMES, name)) return null;
-  return THEMES[name];
+const shiftDay = (dayKey, n) => { const d = new Date(`${dayKey}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+
+/** A date in `year` from "MM-DD", or "easter" / "thanksgiving" with an optional offset in days ("easter-7", "thanksgiving+1"). */
+export function dateSpec(spec, year) {
+  const fixed = /^(\d\d)-(\d\d)$/.exec(spec);
+  if (fixed) {
+    const [m, d] = [Number(fixed[1]), Number(fixed[2])];
+    if (m < 1 || m > 12 || d < 1 || d > 31) throw new Error(`"${spec}" is not a date`);
+    return key(year, m, d);
+  }
+  const rel = /^(easter|thanksgiving)([+-]\d+)?$/.exec(spec);
+  if (!rel) throw new Error(`"${spec}" is not a date: use MM-DD, or easter / thanksgiving with an offset like easter-7`);
+  return shiftDay(rel[1] === 'easter' ? easterSunday(year) : nthWeekday(year, 11, 4, 4), Number(rel[2] ?? 0));
 }
 
-/** The marks for a list of day keys: Map('YYYY-MM-DD' -> mark). */
-export function stampsFor(theme, days) {
+/** Built-in holiday windows: the theme for a holiday replaces the month's design only around the day itself. */
+export const BUILTIN_WINDOWS = [
+  { from: '02-07', to: '02-14', theme: 'valentine' },
+  { from: '03-10', to: '03-17', theme: 'shamrock' },
+  { from: 'easter-7', to: 'easter+1', theme: 'easter' },
+  { from: '06-28', to: '07-05', theme: 'patriotic' },
+  { from: '10-24', to: '10-31', theme: 'halloween' },
+  { from: 'thanksgiving-4', to: 'thanksgiving', theme: 'autumn' },
+  { from: '12-12', to: '12-26', theme: 'christmas' },
+];
+
+/** The theme name of the first window that holds `day` (YYYY-MM-DD), or null. Windows repeat every year and may span new year. */
+function windowTheme(day, windows) {
+  const year = Number(day.slice(0, 4));
+  for (const w of windows) {
+    for (const y of [year - 1, year, year + 1]) {
+      const from = dateSpec(w.from, y);
+      let to = dateSpec(w.to, y);
+      if (to < from) to = dateSpec(w.to, y + 1);
+      if (day >= from && day <= to) return w.theme;
+    }
+  }
+  return null;
+}
+
+/** Every built-in holiday's decorated cell, whatever the theme (Easter Sunday has its bunny in any April design). */
+const builtinMarks = (year) => Object.assign({}, ...Object.values(THEMES).map((t) => t.marks?.(year) ?? {}));
+
+// --- Plans: which theme when, with your settings applied ----------------------------------------------------
+
+const HEX = /^#[0-9a-f]{6}$/i;
+const PATTERN_KINDS = ['dots', 'confetti', 'snow', 'stars', 'hearts', 'leaves', 'clover', 'lines'];
+const GROUND_KINDS = ['hills', 'snow', 'waves', 'stripes'];
+const NAME = /^[a-z0-9][a-z0-9_-]*$/;
+const CUSTOM_KEYS = ['label', 'extends', 'chrome', 'sky', 'pattern', 'ground', 'motifs', 'holidays'];
+const THEMES_KEYS = ['months', 'windows', 'builtin_windows', 'custom', 'marks'];
+
+function checkKeys(obj, allowed, where) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error(`${where} must be a map`);
+  for (const k of Object.keys(obj)) if (!allowed.includes(k)) throw new Error(`${where}: unknown key "${k}" (allowed: ${allowed.join(', ')})`);
+}
+function colors(list, where, min = 1) {
+  if (!Array.isArray(list) || list.length < min || !list.every((c) => HEX.test(String(c)))) throw new Error(`${where} must be a list of ${min === 1 ? 'one or more' : min} colors like "#3b2a5a"`);
+  return list.map(String);
+}
+const luminance = (hex) => { const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)); return 0.299 * r + 0.587 * g + 0.114 * b; };
+
+function markFrom(m, where) {
+  checkKeys(m, ['motif', 'tint', 'deco', 'speckle', 'variant'], where);
+  if (!MOTIF_NAMES.includes(m.motif)) throw new Error(`${where}: motif "${m.motif}" is not one of ${MOTIF_NAMES.join(', ')}`);
+  if (!HEX.test(String(m.tint))) throw new Error(`${where}: tint must be a color like "#ffe0b0"`);
+  if (m.speckle !== undefined && !['stars', 'dots'].includes(m.speckle)) throw new Error(`${where}: speckle must be stars or dots`);
+  return mark(m.motif, String(m.tint), m.deco === undefined ? ['#FFFFFF'] : colors(m.deco, `${where}.deco`), { ...(m.speckle ? { speckle: m.speckle } : {}), variant: Number(m.variant ?? 0) });
+}
+/** (year) => { 'YYYY-MM-DD': mark } from a map of date specs to marks. */
+function marksFn(map, where) {
+  const specs = Object.entries(map ?? {}).map(([spec, m]) => { dateSpec(spec, 2026); return [spec, markFrom(m, `${where}.${spec}`)]; });
+  return (year) => Object.fromEntries(specs.map(([spec, m]) => [dateSpec(spec, year), m]));
+}
+
+function customTheme(name, def, base, where) {
+  checkKeys(def, CUSTOM_KEYS, where);
+  let from = null;
+  if (def.extends !== undefined) {
+    from = base[def.extends];
+    if (!from) throw new Error(`${where}: extends "${def.extends}", which is not a theme (${Object.keys(base).join(', ')})`);
+  }
+  const theme = from ? { ...from } : {};
+  theme.name = name; theme.label = def.label ? String(def.label) : (from?.label ?? name);
+  if (def.chrome !== undefined) theme.chrome = String(def.chrome);
+  if (!HEX.test(theme.chrome ?? '')) throw new Error(`${where}: chrome (the weekday band and panel title color) must be a color like "#3b2a5a"`);
+  if (luminance(theme.chrome) >= 150) throw new Error(`${where}: chrome ${theme.chrome} is too light for the white text on it`);
+  if (def.sky !== undefined) theme.bg = colors(def.sky, `${where}.sky`, 2).slice(0, 2);
+  if (!theme.bg) throw new Error(`${where}: sky must be two colors, the top and bottom of the banner`);
+  if (def.pattern !== undefined) {
+    const pat = def.pattern;
+    if (pat === null) theme.pattern = null;
+    else {
+      checkKeys(pat, ['kind', 'colors', 'size', 'density'], `${where}.pattern`);
+      if (!PATTERN_KINDS.includes(pat.kind)) throw new Error(`${where}.pattern.kind must be one of ${PATTERN_KINDS.join(', ')}`);
+      theme.pattern = { kind: pat.kind, colors: colors(pat.colors, `${where}.pattern.colors`), size: Number(pat.size ?? 8), density: Number(pat.density ?? 1500) };
+    }
+  }
+  if (def.ground !== undefined) {
+    const g = def.ground;
+    if (g === null) theme.ground = null;
+    else {
+      checkKeys(g, ['kind', 'colors', 'height'], `${where}.ground`);
+      if (!GROUND_KINDS.includes(g.kind)) throw new Error(`${where}.ground.kind must be one of ${GROUND_KINDS.join(', ')}`);
+      theme.ground = { kind: g.kind, colors: colors(g.colors, `${where}.ground.colors`, g.kind === 'waves' ? 1 : 2), height: Number(g.height ?? 0.34) };
+    }
+  }
+  if (def.motifs !== undefined) {
+    if (!Array.isArray(def.motifs) || !def.motifs.length) throw new Error(`${where}.motifs must be a list of motif names`);
+    theme.strip = def.motifs.map((m, i) => {
+      const [motif, variant] = Array.isArray(m) ? m : [m, 0];
+      if (!MOTIF_NAMES.includes(motif)) throw new Error(`${where}.motifs[${i}]: "${motif}" is not one of ${MOTIF_NAMES.join(', ')}`);
+      return [motif, Number(variant ?? 0)];
+    });
+  }
+  if (!theme.strip) throw new Error(`${where}: motifs must list at least one motif`);
+  if (!theme.pattern && theme.pattern !== null) theme.pattern = null;
+  if (theme.ground === undefined) theme.ground = null;
+  if (def.holidays !== undefined) { const own = marksFn(def.holidays, `${where}.holidays`), inherited = from?.marks; theme.marks = (y) => ({ ...(inherited?.(y) ?? {}), ...own(y) }); }
+  return theme;
+}
+
+/**
+ * Turns your `themes:` settings into a plan, checking everything. `settings`: { months: { oct: "autumn" }, windows: [{ from, to,
+ * theme }], builtin_windows: false, custom: { name: {...} }, marks: { "MM-DD": {...} } }. Returns { themes, names, months (12 names
+ * or ''), windows, marks }.
+ */
+export function buildThemePlan(settings = {}, where = 'themes') {
+  checkKeys(settings, THEMES_KEYS, where);
+  const themes = { ...THEMES };
+  for (const [name, def] of Object.entries(settings.custom ?? {})) {
+    if (!NAME.test(name) || name === 'auto' || name === 'none') throw new Error(`${where}.custom: "${name}" is not a usable theme name (letters, digits, - and _; not auto or none)`);
+    themes[name] = customTheme(name, def, themes, `${where}.custom.${name}`);
+  }
+  const known = (name, at) => { if (name !== 'none' && !Object.hasOwn(themes, name)) throw new Error(`${at}: "${name}" is not a theme (auto and none aside, one of ${Object.keys(themes).join(', ')})`); return name; };
+  const months = [...MONTH_THEMES];
+  for (const [mon, name] of Object.entries(settings.months ?? {})) {
+    const i = MONTH_KEYS.indexOf(String(mon).toLowerCase());
+    if (i < 0) throw new Error(`${where}.months: "${mon}" is not a month (${MONTH_KEYS.join(', ')})`);
+    months[i] = known(String(name).toLowerCase(), `${where}.months.${mon}`);
+  }
+  const windows = (settings.windows ?? []).map((w, i) => {
+    checkKeys(w, ['from', 'to', 'theme'], `${where}.windows[${i}]`);
+    for (const end of ['from', 'to']) { try { dateSpec(String(w[end]), 2026); } catch (err) { throw new Error(`${where}.windows[${i}].${end}: ${err.message}`); } }
+    return { from: String(w.from), to: String(w.to), theme: known(String(w.theme), `${where}.windows[${i}].theme`) };
+  });
+  if (settings.builtin_windows !== false) windows.push(...BUILTIN_WINDOWS);
+  const marks = marksFn(settings.marks, `${where}.marks`);
+  return { themes, names: Object.keys(themes), months, windows, marks };
+}
+
+export const DEFAULT_PLAN = buildThemePlan();
+
+/** A setting is valid if it is auto, none, or a theme in the plan. */
+export const isThemeSetting = (s, plan = DEFAULT_PLAN) => s === 'auto' || s === 'none' || Object.hasOwn(plan.themes, s);
+
+/**
+ * The theme to draw on `day` (YYYY-MM-DD): `setting` is auto (a holiday window if one holds the day, else the month's design),
+ * none, or a theme name that is worn all year. A month set to none in the plan has no theme at all, windows included.
+ * Returns the theme, or null for none.
+ */
+export function resolveTheme(setting, day, plan = DEFAULT_PLAN) {
+  let name = setting;
+  if (setting === 'auto') {
+    const month = plan.months[Number(day.slice(5, 7)) - 1];
+    name = month === 'none' ? 'none' : windowTheme(day, plan.windows) ?? month;
+  }
+  if (name === 'none' || !Object.hasOwn(plan.themes, name)) return null;
+  return plan.themes[name];
+}
+
+/** The decorated cells for a list of day keys: Map('YYYY-MM-DD' -> mark). None without a theme. */
+export function stampsFor(theme, days, plan = DEFAULT_PLAN) {
   const out = new Map();
-  if (!theme?.marks) return out;
+  if (!theme) return out;
   const wanted = new Set(days);
   for (const year of new Set(days.map((d) => Number(d.slice(0, 4))))) {
-    for (const [day, m] of Object.entries(theme.marks(year))) if (m && wanted.has(day)) out.set(day, m);
+    for (const [day, m] of Object.entries({ ...builtinMarks(year), ...(theme.marks?.(year) ?? {}), ...plan.marks(year) })) if (m && wanted.has(day)) out.set(day, m);
   }
   return out;
 }

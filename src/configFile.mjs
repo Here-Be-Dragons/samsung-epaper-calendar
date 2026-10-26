@@ -12,6 +12,7 @@
  *     - id: kitchen
  *       host: 192.168.1.123
  *       ...
+ *   themes:                          optional: which theme when, and your own (checked by buildThemePlan in themes.mjs)
  *
  * A calendar link is a credential, so no message made here ever contains a value from the file: errors name the
  * entry and the key, and YAML syntax errors give a line number, never the line.
@@ -21,7 +22,7 @@ import path from 'node:path';
 import { parseDocument } from 'yaml';
 
 export const CALENDAR_INKS = ['blue', 'red', 'green', 'black', 'yellow'];
-const TOP_KEYS = ['calendars', 'displays'];
+const TOP_KEYS = ['calendars', 'displays', 'themes'];
 const CALENDAR_KEYS = ['id', 'url', 'name', 'color', 'mark_days'];
 export const DISPLAY_KEYS = [
   'id', 'host', 'mac', 'pin', 'rotation', 'layout', 'theme', 'width', 'height', 'refresh_interval_seconds', 'mdc_port', 'wake',

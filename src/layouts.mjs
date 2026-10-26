@@ -11,7 +11,7 @@ import { px } from './scale.mjs';
 import { dayAgenda, buildMonth } from './calendar.mjs';
 import { longDay, minuteOfDay, shortDay } from './dates.mjs';
 import {
-  INK, ON, F, MARGIN, WEEKDAY_H, headerH, footerH, outlined, fit, wrap,
+  INK, ON, F, MARGIN, WEEKDAY_H, headerH, footerH, outlined, fit, drawText, wrap,
   drawHeader, drawMonth, drawAgenda, drawComingUp, drawShopping, panelHeader, timeLabel,
 } from './draw.mjs';
 
@@ -45,12 +45,33 @@ function compactTop(ctx, model, w, S) {
   const x = px(MARGIN), cw = w - 2 * px(MARGIN);
   const gridTop = px(headerH(S) + 8);
   const weeks = buildMonth(model).weeks.length;
-  const gridH = px(WEEKDAY_H) + weeks * px(weeks > 5 ? 80 : 96);
+  const gridH = px(WEEKDAY_H) + weeks * px(weeks > 5 ? 80 : 100); // a five-week month's rows hold three lines of titles
   drawMonth(ctx, model, x, gridTop, cw, gridH, S, { compact: true });
   return gridTop + gridH + px(14);
 }
 
 // --- timeline: today hour by hour ---------------------------------------------------------------------
+
+/**
+ * Splits overlapping events into side-by-side lanes. `span` is [{ s, e }] in minutes, sorted by start; `minMinutes` is the
+ * shortest time a drawn block covers (a block is never shorter than its title needs), so an event is laid out by
+ * `d = max(e, s + minMinutes)`. Returns each event with its `lane` and the `lanes` its cluster of overlaps has in all.
+ */
+export function assignLanes(span, minMinutes = 0) {
+  const laid = [];
+  let cluster = [], clusterEnd = -1;
+  const flush = () => { const lanes = Math.max(0, ...cluster.map((c) => c.lane + 1)); cluster.forEach((c) => { c.lanes = lanes; laid.push(c); }); cluster = []; };
+  for (const t0 of span) {
+    const t = { ...t0, d: Math.max(t0.e, t0.s + minMinutes) };
+    if (t.s >= clusterEnd && cluster.length) flush();
+    const used = new Set(cluster.filter((c) => c.d > t.s).map((c) => c.lane));
+    let lane = 0; while (used.has(lane)) lane++;
+    cluster.push({ ...t, lane });
+    clusterEnd = Math.max(clusterEnd < 0 || !cluster.length ? 0 : clusterEnd, t.d);
+  }
+  flush();
+  return laid;
+}
 
 function drawTimeline(ctx, model, x, y, w, h, S) {
   const bottom = y + h;
@@ -68,7 +89,7 @@ function drawTimeline(ctx, model, x, y, w, h, S) {
     if (outlined(ink)) { ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); ctx.strokeRect(x, cy + px(4), w, chipH); }
     ctx.fillStyle = ON[ink]; ctx.font = F.bold(14);
     const span = ev.endDay > ev.startDay ? `  (${shortDay(ev.startDay).replace(/^\w+, /, '')} – ${shortDay(ev.endDay).replace(/^\w+, /, '')})` : '';
-    ctx.fillText(fit(ctx, ev.title + span, F.bold(14), w - px(14)), x + px(7), cy + px(4) + px(16));
+    drawText(ctx, fit(ctx, ev.title + span, F.bold(14), w - px(14)), x + px(7), cy + px(4) + px(16));
     cy += chipH + px(4);
   });
   if (allDay.length > maxChips) {
@@ -108,18 +129,10 @@ function drawTimeline(ctx, model, x, y, w, h, S) {
   }
   ctx.fillRect(bx0, yOf(startH * 60), 1, (endH - startH) * hourH);
 
-  // Overlapping events share the width: each cluster of overlaps is split into side-by-side lanes.
-  const laid = [];
-  let cluster = [], clusterEnd = -1;
-  const flush = () => { const lanes = Math.max(0, ...cluster.map((c) => c.lane + 1)); cluster.forEach((c) => { c.lanes = lanes; laid.push(c); }); cluster = []; };
-  for (const t of span) {
-    if (t.s >= clusterEnd && cluster.length) flush();
-    const used = new Set(cluster.filter((c) => c.e > t.s).map((c) => c.lane));
-    let lane = 0; while (used.has(lane)) lane++;
-    cluster.push({ ...t, lane });
-    clusterEnd = Math.max(clusterEnd < 0 || !cluster.length ? 0 : clusterEnd, t.e);
-  }
-  flush();
+  // Overlapping events share the width: each cluster of overlaps is split into side-by-side lanes. A block is never drawn
+  // shorter than a title needs, so a short event is laid out by the minutes its block covers (`d`), not just its own: the next
+  // event may start before that block ends on the page.
+  const laid = assignLanes(span, ((px(24) + 3) * 60) / hourH);
 
   for (const t of laid) {
     const { ev } = t, ink = ev.cal.color;
@@ -132,10 +145,10 @@ function drawTimeline(ctx, model, x, y, w, h, S) {
     const inner = bwid - px(10);
     const titleLines = wrap(ctx, ev.title, F.bold(13), inner, Math.max(1, Math.min(3, Math.floor((bh - px(6)) / px(16)) - (bh > px(44) ? 1 : 0))));
     let ty = top + px(15);
-    if (bh > px(44)) { ctx.font = F.regular(11); ctx.fillText(fit(ctx, timeLabel(ev, key).join(' ').replace('– ', '– '), F.regular(11), inner), bx + px(6), ty - px(1)); ty += px(15); }
+    if (bh > px(44)) { ctx.font = F.regular(11); drawText(ctx, fit(ctx, timeLabel(ev, key).join(' ').replace('– ', '– '), F.regular(11), inner), bx + px(6), ty - px(1)); ty += px(15); }
     ctx.font = F.bold(13);
-    titleLines.forEach((l) => { ctx.fillText(l, bx + px(6), ty); ty += px(16); });
-    if (ev.location && ty + px(10) < top + bh) { ctx.font = F.regular(11); ctx.fillText(fit(ctx, ev.location, F.regular(11), inner), bx + px(6), ty - px(2)); }
+    titleLines.forEach((l) => { drawText(ctx, l, bx + px(6), ty); ty += px(16); });
+    if (ev.location && ty + px(10) < top + bh) { ctx.font = F.regular(11); drawText(ctx, fit(ctx, ev.location, F.regular(11), inner), bx + px(6), ty - px(2)); }
   }
 }
 

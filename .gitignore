@@ -11,6 +11,11 @@ npm-debug.log*
 config/*
 !config/config.example.yaml
 
+# Your own theme art: header, footer and motif PNGs are custom per person (the README and the guides are published)
+themes/*
+!themes/README.md
+!themes/guides/
+
 # Runtime state, measurement logs and your own shopping list
 state.json
 *.jsonl

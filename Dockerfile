@@ -8,6 +8,8 @@ RUN npm ci --omit=dev
 
 COPY src/ ./src/
 COPY fonts/ ./fonts/
+# Your own theme art (see themes/README.md): whatever PNGs are in themes/ when you build. The published image has none.
+COPY themes/ ./themes/
 
 # Everything else is configured through .env (see .env.example).
 ENV NODE_ENV=production \

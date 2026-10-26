@@ -20,10 +20,16 @@ import { addDays, diffDays, dayOfMonth, monthOf, fullDay, longDay, shortDay, clo
 import { drawMotif, drawScene, drawCellDecor, stampsFor } from './themes.mjs';
 
 export const INK = { red: RED, green: GREEN, blue: BLUE, black: BLACK, yellow: YELLOW };
-/** Text color that reads on a fill of this ink. */
-export const ON = { red: WHITE, blue: WHITE, black: WHITE, green: BLACK, yellow: BLACK };
-/** Yellow and green fills get a black outline: against white paper they are too faint alone. */
-export const outlined = (ink) => ink === 'yellow' || ink === 'green';
+/** Text color that reads on a fill of this ink. (Green is white: on the panel its green is much darker than on a screen.) */
+export const ON = { red: WHITE, blue: WHITE, black: WHITE, green: WHITE, yellow: BLACK };
+/** A yellow fill gets a black outline: against white paper it is too faint alone. Green does not: it is bright enough, and an
+ * outline would hide most of a thin mark and darken the panel's own green. */
+export const outlined = (ink) => ink === 'yellow';
+/** The black outline of a small color chip (a legend square, a dot): every color but green, which stays the panel's green. */
+function chipEdge(ctx, ink, x, y, w, h) {
+  if (ink === 'green') return;
+  ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); ctx.strokeRect(x, y, w, h);
+}
 
 let fontsRegistered = false;
 export function ensureFonts() {
@@ -103,11 +109,40 @@ export function roundedRect(ctx, x, y, w, h, r) {
 
 const width = (ctx, text, font) => { ctx.font = font; return ctx.measureText(text).width; };
 
+/**
+ * The ellipsis is three small square dots, close together, about half the width of the font's own "…" (which is a full em).
+ * That leaves room for a letter or two more of the text. `fit` ends a cut text with the "…" character, and `drawText` draws
+ * that character as these dots. Each dot is at least 2 px, so it stays solid on the panel.
+ */
+function ellipsisParts(ctx) {
+  const size = parseFloat(/([\d.]+)px/.exec(ctx.font)?.[1] ?? '16');
+  const dot = Math.max(2, Math.round(size * 0.11)), gap = Math.max(1, Math.round(dot * 0.7));
+  return { dot, gap, w: 3 * dot + 2 * gap, pad: gap + 1 };
+}
+
+/** The width of text drawn with drawText: a trailing "…" counts as the compact dots, not the font's wide glyph. */
+function measure(ctx, text, font) {
+  const ends = text.endsWith('…'), w = width(ctx, ends ? text.slice(0, -1) : text, font);
+  if (!ends) return w;
+  const e = ellipsisParts(ctx);
+  return w + e.pad + e.w;
+}
+
+/** The text, or as much of its start as fits in `maxW` with the compact ellipsis after it (drawn by drawText). */
 export function fit(ctx, text, font, maxW) {
-  if (width(ctx, text, font) <= maxW) return text;
-  let t = text;
-  while (t.length > 1 && width(ctx, `${t}…`, font) > maxW) t = t.slice(0, -1);
+  if (measure(ctx, text, font) <= maxW) return text;
+  let t = text.endsWith('…') ? text.slice(0, -1) : text;
+  while (t.length > 1 && measure(ctx, `${t.trimEnd()}…`, font) > maxW) t = t.slice(0, -1);
   return `${t.trimEnd()}…`;
+}
+
+/** Draws text from `fit` or `wrap` in the current font and fill color: a trailing "…" becomes the compact dots. */
+export function drawText(ctx, text, x, y) {
+  if (!text.endsWith('…')) { ctx.fillText(text, x, y); return; }
+  const body = text.slice(0, -1), e = ellipsisParts(ctx);
+  ctx.fillText(body, x, y);
+  const x0 = Math.round(x + ctx.measureText(body).width + e.pad), y0 = Math.round(y);
+  for (let i = 0; i < 3; i++) ctx.fillRect(x0 + i * (e.dot + e.gap), y0 - e.dot, e.dot, e.dot);
 }
 
 /** Wraps text into at most `maxLines` lines of `maxW`, ending the last one with an ellipsis if cut. */
@@ -129,6 +164,8 @@ export function wrap(ctx, text, font, maxW, maxLines) {
 }
 
 export const MARGIN = 16;
+/** The width of the white outline around the date in a themed header, in design units. */
+export const WIDE_OUTLINE = 5;
 export const HEADER_H = 96;
 export const WEEKDAY_H = 28;
 
@@ -159,7 +196,7 @@ export function drawHeader(ctx, model, w, S) {
     const rx = w - px(MARGIN) - lw - px(18);
     const y = startY + i * rowH;
     ctx.fillStyle = INK[c.color]; ctx.fillRect(rx, y + px(3), sw, sw);
-    ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); ctx.strokeRect(rx, y + px(3), sw, sw);
+    chipEdge(ctx, c.color, rx, y + px(3), sw, sw);
     ctx.fillStyle = BLACK; ctx.fillText(label, rx + px(18), y + px(14));
   });
 
@@ -173,40 +210,54 @@ function plate(ctx, S, x, y, w, h, r, border) {
   roundedRect(ctx, x, y, w, h, r); ctx.fillStyle = WHITE; ctx.fill();
 }
 
-/** The themed header: a scenic banner with the date on a white plate (so it reads), motifs beside it
- * and standing on the ground. */
+/** The themed header: a scenic banner with the date centered on it, in black with a white outline (so it reads on
+ * any art), large motifs either side of it and small ones standing on the ground. */
 function drawThemedHeader(ctx, model, w, S) {
   const T = S.theme, H = px(headerH(S));
-  drawScene(S.art, T, 0, 0, w, H, 1);
+  const banner = S.images?.header; // your own header.png replaces the generated scene and its motifs
+  if (banner) drawCover(S.art, banner, 0, 0, w, H); else drawScene(S.art, T, 0, 0, w, H, 1);
   ctx.textBaseline = 'alphabetic';
   const text = fullDay(model.today);
   let size = 42;
   for (; size > 24; size--) if (width(ctx, text, F.bold(size)) <= w - 2 * px(MARGIN) - px(34) - px(130)) break;
-  const tw = width(ctx, text, F.bold(size));
-  const plateX = px(MARGIN), plateY = px(13), plateW = tw + px(34), plateH = px(60);
-  plate(ctx, S, plateX, plateY, plateW, plateH, px(14), px(3));
-  ctx.fillStyle = BLACK; ctx.font = F.bold(size);
-  ctx.fillText(text, plateX + px(17), plateY + plateH / 2 + px(size) * 0.36);
+  ctx.font = F.bold(size);
+  const tw = width(ctx, text, F.bold(size)), halo = px(WIDE_OUTLINE);
+  // Centered across the header; over your own banner also centered down it, over the generated scene above its ground.
+  const dateX = (w - tw) / 2, dateY = (banner ? (H - px(4)) / 2 : px(43)) + px(size) * 0.36;
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.strokeStyle = WHITE; ctx.lineWidth = halo; ctx.strokeText(text, dateX, dateY);
+  ctx.fillStyle = BLACK; ctx.fillText(text, dateX, dateY);
 
-  // Large motifs in the room right of the plate, small ones standing along the ground.
-  const x0 = plateX + plateW + px(16), room = w - px(MARGIN) - x0, step = px(52);
-  for (let i = 0; i < Math.min(4, Math.floor(room / step)); i++) {
+  // Large motifs in the room either side of the date, small ones standing along the ground.
+  const step = px(52), room = (w - tw) / 2 - halo / 2 - px(MARGIN);
+  for (let i = 0; i < Math.min(2, Math.floor(room / step)); i++) {
+    if (banner) break;
     const [motif, variant] = T.strip[i % T.strip.length];
-    drawMotif(S.art, motif, x0 + step / 2 + i * step, px(44), px(44), variant + Math.floor(i / T.strip.length));
+    drawMotif(S.art, motif, px(MARGIN) + step / 2 + i * step, px(44), px(44), variant + i);
+    const [motifR, variantR] = T.strip[(i + 2) % T.strip.length];
+    drawMotif(S.art, motifR, w - px(MARGIN) - step / 2 - i * step, px(44), px(44), variantR + i);
   }
   const gstep = px(74), count = Math.floor((w - 2 * px(MARGIN)) / gstep);
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count && !banner; i++) {
     const [motif, variant] = T.strip[(i + 2) % T.strip.length];
     drawMotif(S.art, motif, px(MARGIN) + gstep / 2 + i * gstep, px(100) + (i % 2) * px(2), px(34), variant + i);
   }
   S.art.fillStyle = T.chrome; S.art.fillRect(0, H - px(4), w, px(4));
 }
 
+/** Draws an image to fill a box, scaled to cover it and centered (what overflows is cropped). */
+function drawCover(ctx, image, x, y, w, h) {
+  const k = Math.max(w / image.width, h / image.height), dw = image.width * k, dh = image.height * k;
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.drawImage(image, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+  ctx.restore();
+}
+
 /** The themed footer: a scenic strip along the bottom holding the calendar legend on a white plate. */
 export function drawFooter(ctx, model, w, h, S) {
   if (!S.theme) return;
   const T = S.theme, F0 = px(footerH(S)), y0 = h - F0;
-  drawScene(S.art, T, 0, y0, w, F0, 2);
+  const strip = S.images?.footer; // your own footer.png replaces the generated scene and its motifs
+  if (strip) drawCover(S.art, strip, 0, y0, w, F0); else drawScene(S.art, T, 0, y0, w, F0, 2);
   ctx.textBaseline = 'alphabetic';
   const entries = model.calendars.map((c) => ({ c, label: c.ok ? c.name : `${c.name} (offline)` }));
   let font = 14;
@@ -217,12 +268,12 @@ export function drawFooter(ctx, model, w, h, S) {
   let x = px0 + px(15);
   for (const { c, label } of entries) {
     ctx.fillStyle = INK[c.color]; ctx.fillRect(x, py0 + px(9), px(12), px(12));
-    ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); ctx.strokeRect(x, py0 + px(9), px(12), px(12));
+    chipEdge(ctx, c.color, x, py0 + px(9), px(12), px(12));
     ctx.fillStyle = BLACK; ctx.font = F.regular(font); ctx.fillText(label, x + px(18), py0 + px(20));
     x += px(12) + px(6) + width(ctx, label, F.regular(font)) + px(18);
   }
   const room = (w - pw) / 2 - px(MARGIN), step = px(48);
-  for (let i = 0; i < Math.min(3, Math.floor(room / step)); i++) {
+  for (let i = 0; i < Math.min(3, Math.floor(room / step)) && !strip; i++) {
     const [motif, variant] = T.strip[(i + 1) % T.strip.length];
     drawMotif(S.art, motif, px(MARGIN) + step / 2 + i * step, y0 + px(34), px(38), variant + i);
     const [motifR, variantR] = T.strip[(i + 4) % T.strip.length];
@@ -265,11 +316,11 @@ export function drawMonth(ctx, model, x, y, w, h, S, { compact = false } = {}) {
   const colW = w / 7;
   const wdH = px(WEEKDAY_H);
   const rowH = (h - wdH) / weeks.length;
-  const NUM_H = px(compact ? 24 : 28), LINE_H = px(21), BAR_H = px(19);
+  const NUM_H = px(compact ? 22 : 28), LINE_H = px(compact ? 20 : 21), BAR_H = px(compact ? 18 : 19);
   const dotsH = compact ? px(15) : 0;
   const capacity = Math.max(1, Math.floor((rowH - NUM_H - dotsH - px(2)) / LINE_H));
   const marked = markedDays(model);
-  const stamps = stampsFor(S.theme, weeks.flatMap((wk) => wk.days));
+  const stamps = stampsFor(S.theme, weeks.flatMap((wk) => wk.days), S.plan);
   const line = Math.max(1, px(1.5));
 
   // Weekday header.
@@ -336,31 +387,47 @@ export function drawMonth(ctx, model, x, y, w, h, S, { compact = false } = {}) {
       if (outlined(ink)) { ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); barShape(ctx, shape); ctx.stroke(); }
       ctx.fillStyle = ON[ink]; ctx.font = F.bold(13);
       const padL = bar.contL ? px(11) : px(6), padR = bar.contR ? px(11) : px(6);
-      ctx.fillText(fit(ctx, bar.ev.title, F.bold(13), bw - padL - padR), bx + padL, by + px(14));
+      drawText(ctx, fit(ctx, bar.ev.title, F.bold(13), bw - padL - padR), bx + padL, by + px(14));
     }
 
-    // Single-day timed events, in whichever rows of the day's cell the bars leave free. When they do
-    // not all fit, the last free row says how many are hidden. Compact months draw a dot per event.
+    // Single-day timed events, in whichever rows of the day's cell the all-day bars leave free (the bars come first), each
+    // as its title in black beside a thin bar in its calendar's color. When they do not all fit, a compact month shows a dot
+    // for each of the rest, and the full month says in its last free row how many are hidden.
     week.days.forEach((key, ci) => {
       const evs = week.singles.get(key) ?? [];
       const covering = week.bars.filter((b) => ci >= b.startCol && ci <= b.endCol);
       const hiddenBars = covering.filter((b) => !drawn(b)).length;
       const cx = x + ci * colW;
+      const taken = new Set(covering.filter(drawn).map((b) => b.lane));
+      const free = Array.from({ length: capacity }, (_, i) => i).filter((i) => !taken.has(i));
+      const titled = (list) => list.forEach((ev, i) => {
+        // The bar starts where an all-day bar's left edge does, and the title's first letter where an all-day bar's title does.
+        const ly = top + NUM_H + free[i] * LINE_H, ink = ev.cal.color, bx = cx + px(2);
+        ctx.fillStyle = INK[ink]; ctx.fillRect(bx, ly + px(1), px(4), px(17));
+        if (outlined(ink)) { ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); ctx.strokeRect(bx, ly + px(1), px(4), px(17)); }
+        ctx.fillStyle = BLACK; ctx.font = F.regular(13);
+        drawText(ctx, fit(ctx, ev.title, F.regular(13), colW - px(14)), cx + px(2) + px(6), ly + px(14));
+      });
       if (compact) {
-        const dot = px(8), step = px(11);
-        const room = Math.max(1, Math.floor((colW - px(10)) / step));
-        const showDots = evs.length > room ? room - 1 : evs.length;
+        const listed = evs.slice(0, free.length); // the events that fit are listed by title, the rest become dots
+        titled(listed);
+        const dotted = evs.slice(listed.length);
+        const dot = px(8), step = px(11), avail = colW - px(12);
+        ctx.font = F.bold(11);
+        // As many dots as leave room for the "+N" after them, inside the cell.
+        const fits = (n) => { const more = dotted.length - n + hiddenBars; return n * step + (more > 0 ? ctx.measureText(`+${more}`).width + px(2) : 0) <= avail; };
+        let showDots = dotted.length;
+        while (showDots > 0 && !fits(showDots)) showDots--;
         const dy = top + rowH - px(12);
-        evs.slice(0, showDots).forEach((ev, i) => {
+        dotted.slice(0, showDots).forEach((ev, i) => {
           ctx.fillStyle = INK[ev.cal.color]; ctx.fillRect(cx + px(6) + i * step, dy, dot, dot);
-          ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); ctx.strokeRect(cx + px(6) + i * step, dy, dot, dot);
+          chipEdge(ctx, ev.cal.color, cx + px(6) + i * step, dy, dot, dot);
         });
-        const more = evs.length - showDots + hiddenBars;
+        const more = dotted.length - showDots + hiddenBars;
         if (more > 0) { ctx.fillStyle = BLACK; ctx.font = F.bold(11); ctx.fillText(`+${more}`, cx + px(6) + showDots * step, dy + px(9)); }
         return;
       }
-      const taken = new Set(covering.filter(drawn).map((b) => b.lane));
-      const free = Array.from({ length: capacity }, (_, i) => i).filter((i) => !taken.has(i));
+      const lanes = capacity;
       let shown = evs;
       let more = hiddenBars;
       if (evs.length + (hiddenBars ? 1 : 0) > free.length) {
@@ -368,15 +435,9 @@ export function drawMonth(ctx, model, x, y, w, h, S, { compact = false } = {}) {
         shown = evs.slice(0, room);
         more += evs.length - room;
       }
-      shown.forEach((ev, i) => {
-        const ly = top + NUM_H + free[i] * LINE_H;
-        ctx.fillStyle = INK[ev.cal.color]; ctx.fillRect(cx + px(5), ly + px(4), px(9), px(9));
-        ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); ctx.strokeRect(cx + px(5), ly + px(4), px(9), px(9));
-        ctx.fillStyle = BLACK; ctx.font = F.regular(13);
-        ctx.fillText(fit(ctx, ev.title, F.regular(13), colW - px(22)), cx + px(18), ly + px(14));
-      });
+      titled(shown);
       if (more > 0) {
-        const ly = top + NUM_H + (free[shown.length] ?? capacity - 1) * LINE_H;
+        const ly = top + NUM_H + (free[shown.length] ?? lanes - 1) * LINE_H;
         ctx.fillStyle = BLACK; ctx.font = F.bold(12);
         ctx.fillText(`+${more} more`, cx + px(6), ly + px(14));
       }
@@ -438,15 +499,15 @@ export function drawAgenda(ctx, model, x, y, w, h, S) {
     ctx.fillStyle = INK[ink]; ctx.fillRect(x, cy + px(3), px(5), h2 - px(8));
     if (outlined(ink)) { ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); ctx.strokeRect(x, cy + px(3), px(5), h2 - px(8)); }
     const [t1, t2] = timeLabel(ev, key);
-    ctx.fillStyle = BLACK; ctx.font = F.bold(16); ctx.fillText(fit(ctx, t1, F.bold(16), timeW - px(4)), x + px(12), cy + px(22));
-    ctx.font = F.regular(14); ctx.fillText(fit(ctx, t2, F.regular(14), timeW - px(4)), x + px(12), cy + px(41));
+    ctx.fillStyle = BLACK; ctx.font = F.bold(16); drawText(ctx, fit(ctx, t1, F.bold(16), timeW - px(4)), x + px(12), cy + px(22));
+    ctx.font = F.regular(14); drawText(ctx, fit(ctx, t2, F.regular(14), timeW - px(4)), x + px(12), cy + px(41));
     ctx.font = F.bold(19);
-    titleLines.forEach((l, i) => ctx.fillText(l, textX, cy + px(22) + i * px(24)));
+    titleLines.forEach((l, i) => drawText(ctx, l, textX, cy + px(22) + i * px(24)));
     shown.forEach(([label, value], i) => {
       const ly = cy + px(22) + (titleLines.length - 1) * px(24) + px(20) + i * px(19);
       ctx.font = F.bold(14); ctx.fillText(`${label}:`, textX, ly);
       const lw = ctx.measureText(`${label}: `).width;
-      ctx.font = F.regular(14); ctx.fillText(fit(ctx, value, F.regular(14), textW - lw), textX + lw, ly);
+      ctx.font = F.regular(14); drawText(ctx, fit(ctx, value, F.regular(14), textW - lw), textX + lw, ly);
     });
     cy += h2;
     ctx.fillStyle = BLACK; ctx.fillRect(x + px(12), cy - px(3), w - px(12), 1);
@@ -485,10 +546,10 @@ export function drawComingUp(ctx, model, x, y, w, bottom, S, { span = 14, title 
       // A multi-day event reads "Day 2/4" on its later days; its dates are in the heading of its first.
       const t1 = ev.allDay && ev.endDay > ev.startDay ? `Day ${diffDays(ev.startDay, day.key) + 1}/${diffDays(ev.startDay, ev.endDay) + 1}` : timeLabel(ev, day.key)[0];
       ctx.fillStyle = INK[ev.cal.color]; ctx.fillRect(x + px(10), cy + px(5), px(9), px(9));
-      ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); ctx.strokeRect(x + px(10), cy + px(5), px(9), px(9));
+      chipEdge(ctx, ev.cal.color, x + px(10), cy + px(5), px(9), px(9));
       ctx.fillStyle = BLACK; ctx.font = F.regular(14);
       ctx.fillText(t1, x + px(26), cy + px(15));
-      ctx.fillText(fit(ctx, ev.title, F.regular(14), w - px(26) - px(86) - px(8)), x + px(26) + px(88), cy + px(15));
+      drawText(ctx, fit(ctx, ev.title, F.regular(14), w - px(26) - px(86) - px(8)), x + px(26) + px(88), cy + px(15));
       cy += px(22);
     }
     cy += px(4);
@@ -501,7 +562,7 @@ export function drawShopping(ctx, model, x, y, w, h, S) {
   const cy = panelHeader(ctx, x, y, w, config.SHOPPING_TITLE.toUpperCase(), open.length ? `${open.length}` : '', S);
   if (model.shopping.error) {
     ctx.fillStyle = BLACK; ctx.font = F.regular(15);
-    for (const [i, l] of wrap(ctx, 'List unavailable right now.', F.regular(15), w - px(16), 3).entries()) ctx.fillText(l, x + px(8), cy + px(26) + i * px(20));
+    for (const [i, l] of wrap(ctx, 'List unavailable right now.', F.regular(15), w - px(16), 3).entries()) drawText(ctx, l, x + px(8), cy + px(26) + i * px(20));
     return;
   }
   if (!open.length) {
@@ -517,7 +578,7 @@ export function drawShopping(ctx, model, x, y, w, h, S) {
     ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1.5, px(2));
     ctx.strokeRect(x + px(8), ly + px(5), px(15), px(15));
     ctx.fillStyle = BLACK; ctx.font = F.regular(18);
-    ctx.fillText(fit(ctx, item.text, F.regular(18), w - px(8) - px(34)), x + px(32), ly + px(19));
+    drawText(ctx, fit(ctx, item.text, F.regular(18), w - px(8) - px(34)), x + px(32), ly + px(19));
   });
   if (open.length > shown.length) {
     ctx.font = F.bold(15); ctx.fillStyle = BLACK;

@@ -9,7 +9,8 @@
     "start": "node src/server.mjs",
     "test": "node --test test/",
     "probe": "node --env-file=.env scripts/panel-probe.mjs",
-    "demo": "node scripts/render-demo.mjs"
+    "demo": "node scripts/render-demo.mjs",
+    "art-guides": "node scripts/art-template.mjs"
   },
   "dependencies": {
     "@loxjs/node-local-ip": "^2.0.3",

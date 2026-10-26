@@ -27,7 +27,7 @@ const { geometryFor } = await import('../src/geometry.mjs');
 const { createQuantizer } = await import('../src/quantize.mjs');
 
 const VARIANTS = [
-  { label: '1. threshold 0.40 (current)', text: 'threshold', textCut: 0.4 },
+  { label: '1. threshold 0.40', text: 'threshold', textCut: 0.4 },
   { label: '2. threshold 0.25 (bolder)', text: 'threshold', textCut: 0.25 },
   { label: '3. halftone edges (inks only)', text: 'dither' },
   { label: '4. true antialiasing (panel dithers)', text: 'panel' },

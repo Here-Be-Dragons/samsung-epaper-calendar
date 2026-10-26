@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCanvas } from '@napi-rs/canvas';
-import { THEMES, THEME_NAMES, MONTH_THEMES, MOTIF_NAMES, resolveTheme, isThemeSetting, stampsFor, easterSunday, nthWeekday, drawMotif } from '../src/themes.mjs';
+import { THEMES, THEME_NAMES, MONTH_THEMES, MOTIF_NAMES, resolveTheme, isThemeSetting, stampsFor, buildThemePlan, easterSunday, nthWeekday, drawMotif } from '../src/themes.mjs';
 import { render } from '../src/render.mjs';
 import { geometryFor } from '../src/geometry.mjs';
 import { LAYOUT_NAMES } from '../src/layouts.mjs';
@@ -15,19 +15,79 @@ test('Easter Sunday and Thanksgiving fall on the right dates', () => {
   assert.equal(nthWeekday(2025, 5, 0, 2), '2025-05-11'); // Mother's Day
 });
 
-test('theme resolution: auto follows the month, overrides win, none turns it off', () => {
-  assert.equal(resolveTheme('auto', 4).name, 'easter');
-  assert.equal(resolveTheme('auto', 10).name, 'halloween');
-  assert.equal(resolveTheme('auto', 12).name, 'christmas');
-  const overrides = Array(12).fill(''); overrides[3] = 'spring'; overrides[9] = 'none';
-  assert.equal(resolveTheme('auto', 4, overrides).name, 'spring', 'April overridden');
-  assert.equal(resolveTheme('auto', 10, overrides), null, 'October switched off');
-  assert.equal(resolveTheme('auto', 5, overrides).name, MONTH_THEMES[4], 'other months keep their default');
-  assert.equal(resolveTheme('none', 4), null);
-  assert.equal(resolveTheme('christmas', 6).name, 'christmas', 'a name forces the theme all year');
-  assert.ok(isThemeSetting('auto') && isThemeSetting('none') && isThemeSetting('easter') && !isThemeSetting('nope'));
+test('theme resolution: a holiday window beats the month, the month design is the default, none turns it off', () => {
+  assert.equal(resolveTheme('auto', '2026-04-09').name, 'april', 'plain April is not Easter');
+  assert.equal(resolveTheme('auto', '2026-04-05').name, 'easter', 'Easter Sunday');
+  assert.equal(resolveTheme('auto', '2026-03-29').name, 'easter', 'a week before');
+  assert.equal(resolveTheme('auto', '2026-04-06').name, 'easter', 'the day after');
+  assert.equal(resolveTheme('auto', '2026-04-07').name, 'april', 'and then it is April again');
+  assert.equal(resolveTheme('auto', '2027-03-28').name, 'easter', 'Easter in March');
+  assert.equal(resolveTheme('auto', '2026-10-15').name, 'autumn');
+  assert.equal(resolveTheme('auto', '2026-10-27').name, 'halloween');
+  assert.equal(resolveTheme('auto', '2026-11-03').name, 'november');
+  assert.equal(resolveTheme('auto', '2026-11-24').name, 'autumn', 'Thanksgiving week');
+  assert.equal(resolveTheme('auto', '2026-12-03').name, 'december');
+  assert.equal(resolveTheme('auto', '2026-12-20').name, 'christmas');
+  assert.equal(resolveTheme('auto', '2026-02-10').name, 'valentine');
+  assert.equal(resolveTheme('auto', '2026-02-20').name, 'february');
+  assert.equal(resolveTheme('none', '2026-04-05'), null);
+  assert.equal(resolveTheme('christmas', '2026-06-01').name, 'christmas', 'a name forces the theme all year');
+  assert.ok(isThemeSetting('auto') && isThemeSetting('none') && isThemeSetting('easter') && isThemeSetting('april') && !isThemeSetting('nope'));
   assert.equal(MONTH_THEMES.length, 12);
+  assert.equal(new Set(MONTH_THEMES).size, 12, 'a different design every month');
   for (const name of MONTH_THEMES) assert.ok(THEMES[name], name);
+});
+
+test('your settings: months, windows, built-in windows off, and none for a whole month', () => {
+  const plan = buildThemePlan({ months: { apr: 'spring', oct: 'none' }, windows: [{ from: '04-20', to: '04-22', theme: 'christmas' }] });
+  assert.equal(resolveTheme('auto', '2026-04-09', plan).name, 'spring', 'April overridden');
+  assert.equal(resolveTheme('auto', '2026-04-21', plan).name, 'christmas', 'your window');
+  assert.equal(resolveTheme('auto', '2026-04-05', plan).name, 'easter', 'the built-in windows still apply');
+  assert.equal(resolveTheme('auto', '2026-10-15', plan), null, 'October switched off');
+  assert.equal(resolveTheme('auto', '2026-10-30', plan), null, 'including its Halloween window');
+  assert.equal(resolveTheme('auto', '2026-05-10', plan).name, 'spring', 'other months keep their default');
+  const bare = buildThemePlan({ builtin_windows: false });
+  assert.equal(resolveTheme('auto', '2026-04-05', bare).name, 'april', 'no built-in windows: April all month');
+  const overNewYear = buildThemePlan({ windows: [{ from: '12-28', to: '01-03', theme: 'january' }] });
+  assert.equal(resolveTheme('auto', '2026-12-30', overNewYear).name, 'january');
+  assert.equal(resolveTheme('auto', '2027-01-02', overNewYear).name, 'january');
+  assert.equal(resolveTheme('auto', '2027-01-05', overNewYear).name, 'january', 'January is January anyway');
+  assert.notEqual(resolveTheme('auto', '2026-12-27', overNewYear).name, 'january');
+});
+
+test('custom themes: defined from scratch or extending one, checked, and usable everywhere', () => {
+  const plan = buildThemePlan({
+    custom: {
+      'october-night': { extends: 'halloween', chrome: '#3b2a5a', sky: ['#1b1033', '#4a2d7a'], motifs: ['pumpkin', ['bat', 2]] },
+      plain: { chrome: '#224466', sky: ['#ffffff', '#dddddd'], pattern: { kind: 'dots', colors: ['#ffffff'] }, ground: { kind: 'hills', colors: ['#88aa66', '#668844'] }, motifs: ['sun'], holidays: { '10-31': { motif: 'pumpkin', tint: '#ffe0b0' } } },
+    },
+    months: { oct: 'october-night' }, marks: { '11-05': { motif: 'star', tint: '#eeeeff', deco: ['#ffcc00'] } },
+  });
+  const night = resolveTheme('auto', '2026-10-10', plan);
+  assert.equal(night.name, 'october-night');
+  assert.equal(night.chrome, '#3b2a5a');
+  assert.deepEqual(night.strip, [['pumpkin', 0], ['bat', 2]]);
+  assert.equal(night.pattern.kind, 'stars', 'what it does not set comes from the theme it extends');
+  assert.ok(plan.names.includes('plain') && isThemeSetting('plain', plan) && !isThemeSetting('plain'));
+  const plain = plan.themes.plain;
+  assert.deepEqual([...stampsFor(plain, ['2026-10-31', '2026-11-05'], plan).keys()].sort(), ['2026-10-31', '2026-11-05']);
+});
+
+test('custom theme mistakes name the key and the choices', () => {
+  const bad = (settings) => { try { buildThemePlan(settings); } catch (e) { return e.message; } return ''; };
+  assert.match(bad({ custom: { x: { chrome: '#abcdef', sky: ['#000000', '#111111'], motifs: ['sun'] } } }), /too light/);
+  assert.match(bad({ custom: { x: { chrome: 'blue', sky: ['#000000', '#111111'], motifs: ['sun'] } } }), /chrome .* must be a color/);
+  assert.match(bad({ custom: { x: { chrome: '#222222', sky: ['#000000'], motifs: ['sun'] } } }), /sky .* 2 colors/);
+  assert.match(bad({ custom: { x: { chrome: '#222222', sky: ['#000000', '#111111'], motifs: ['spaceship'] } } }), /motifs\[0\]: "spaceship" is not one of/);
+  assert.match(bad({ custom: { x: { chrome: '#222222', sky: ['#000000', '#111111'], motifs: ['sun'], colour: 1 } } }), /unknown key "colour"/);
+  assert.match(bad({ custom: { x: { extends: 'nope', chrome: '#222222' } } }), /extends "nope"/);
+  assert.match(bad({ custom: { x: { chrome: '#222222', sky: ['#000000', '#111111'], motifs: ['sun'], pattern: { kind: 'plaid', colors: ['#fff000'] } } } }), /pattern.kind must be one of/);
+  assert.match(bad({ months: { sept: 'school' } }), /"sept" is not a month/);
+  assert.match(bad({ months: { sep: 'nope' } }), /months.sep: "nope" is not a theme/);
+  assert.match(bad({ windows: [{ from: '13-40', to: '01-01', theme: 'winter' }] }), /windows\[0\].from/);
+  assert.match(bad({ windows: [{ from: '01-01', to: '01-05', theme: 'nope' }] }), /windows\[0\].theme: "nope"/);
+  assert.match(bad({ windows: [{ from: 'easter-x', to: '01-05', theme: 'winter' }] }), /not a date/);
+  assert.match(bad({ colour: 1 }), /unknown key "colour"/);
 });
 
 test('every theme uses only motifs that exist, and a chrome that reads on white', () => {
@@ -38,7 +98,7 @@ test('every theme uses only motifs that exist, and a chrome that reads on white'
     assert.equal(t.bg.length, 2);
     assert.ok(t.strip.length > 0);
     for (const [motif] of t.strip) assert.ok(MOTIF_NAMES.includes(motif), `${name}: ${motif}`);
-    for (const m of Object.values(t.marks(2026))) { assert.ok(MOTIF_NAMES.includes(m.motif), `${name} mark: ${m.motif}`); assert.ok(m.bg && m.deco.length, `${name} mark colors`); }
+    for (const m of Object.values(t.marks?.(2026) ?? {})) { assert.ok(MOTIF_NAMES.includes(m.motif), `${name} mark: ${m.motif}`); assert.ok(m.bg && m.deco.length, `${name} mark colors`); }
   }
 });
 
@@ -48,6 +108,13 @@ test('marks land on the holiday only when it is on the grid', () => {
   assert.deepEqual([...stampsFor(easter, grid).keys()], ['2026-04-05']);
   assert.equal(stampsFor(easter, ['2026-04-12']).size, 0);
   assert.equal(stampsFor(null, grid).size, 0);
+});
+
+test('a holiday cell is decorated in any design, not just the holiday theme', () => {
+  const april = resolveTheme('auto', '2026-04-09');
+  assert.equal(april.name, 'april');
+  assert.deepEqual([...stampsFor(april, ['2026-04-04', '2026-04-05', '2026-04-06']).keys()], ['2026-04-05'], "Easter Sunday has its bunny in April's design");
+  assert.equal(stampsFor(THEMES.autumn, ['2026-10-31']).get('2026-10-31').motif, 'pumpkin');
 });
 
 test('every motif draws without throwing, in every variant', () => {

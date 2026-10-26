@@ -1,7 +1,9 @@
 services:
   samsung-epaper-calendar:
+    # The published multi-arch image (Intel/AMD and ARM). Until it exists, or after `docker compose up --build`, this builds from the
+    # Dockerfile instead.
+    image: ghcr.io/here-be-dragons/samsung-epaper-calendar:latest
     build: .
-    image: samsung-epaper-calendar:latest
     container_name: samsung-epaper-calendar
     restart: unless-stopped
     # Host networking (Linux): the panel fetches its pictures from this machine's own LAN address, and a

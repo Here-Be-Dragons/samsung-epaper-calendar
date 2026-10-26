@@ -9,7 +9,8 @@ import * as config from './config.mjs';
 import { useGeometry } from './geometry.mjs';
 import { serial } from './queue.mjs';
 import { ensureFonts, useFont, addFontSet, fontSetNames, dressContext, styleFor, drawFooter } from './draw.mjs';
-import { resolveTheme } from './themes.mjs';
+import { resolveTheme, useMotifImages, MONTH_KEYS } from './themes.mjs';
+import { loadThemeArt } from './themeArt.mjs';
 import { createQuantizer } from './quantize.mjs';
 import { LAYOUTS, DEFAULT_LAYOUT } from './layouts.mjs';
 
@@ -26,10 +27,10 @@ const quantizerFor = (art, text, alphaCut) => {
 /**
  * Renders one frame from `model` ({ now, today, events, calendars, shopping }) at `geometry`
  * (see geometry.mjs) in the named `layout`, dressed in the theme `theme` resolves to for the month
- * of `model.today` (auto, none, or a theme name; `themeMonths` overrides auto per month). Frames
+ * of `model.today` (auto, none, or a theme name; `plan` holds the months, holiday windows and custom themes). Frames
  * render one at a time because px() reads the current geometry.
  */
-export function render(model, { geometry, layout = DEFAULT_LAYOUT, theme = config.THEME, themeMonths = config.THEME_MONTHS, art: artMode = config.ART_DITHER, font = config.FONT, text: textMode = config.TEXT_AA, textCut = config.TEXT_CUT }) {
+export function render(model, { geometry, layout = DEFAULT_LAYOUT, theme = config.THEME, plan = config.THEME_PLAN, art: artMode = config.ART_DITHER, font = config.FONT, text: textMode = config.TEXT_AA, textCut = config.TEXT_CUT }) {
   const draw = LAYOUTS[layout];
   if (!draw) throw new Error(`Unknown layout "${layout}"`);
   if (!config.TEXT_MODES.includes(textMode)) throw new Error(`Unknown text mode "${textMode}". Available: ${config.TEXT_MODES.join(', ')}`);
@@ -43,7 +44,10 @@ export function render(model, { geometry, layout = DEFAULT_LAYOUT, theme = confi
     const ctx = contentCanvas.getContext('2d'), art = artCanvas.getContext('2d');
     ctx.textBaseline = 'alphabetic';
     dressContext(ctx);
-    const S = styleFor(resolveTheme(theme, Number(model.today.slice(5, 7)), themeMonths), art);
+    const S = styleFor(resolveTheme(theme, model.today, plan), art);
+    S.plan = plan;
+    S.images = S.theme ? await loadThemeArt(S.theme.name, { month: MONTH_KEYS[Number(model.today.slice(5, 7)) - 1] }) : null; // your own PNGs for this theme, if any
+    useMotifImages(S.images?.motifs);
     draw(ctx, model, { w, h, S });
     drawFooter(ctx, model, w, h, S);
     const quantizer = quantizerFor(artMode, textMode, textCut);

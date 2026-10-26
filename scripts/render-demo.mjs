@@ -18,7 +18,7 @@ const example = (name) => path.join(root, 'examples', name);
 // Everything the renderer reads comes from here, whatever the shell has exported (or config/ holds).
 for (const key of Object.keys(process.env)) if (/^(ART|CALENDAR|CONFIG|DISPLAY|THEME|LAYOUT|SHOPPING|GOOGLE|MQTT)/.test(key)) delete process.env[key];
 Object.assign(process.env, {
-  TIMEZONE: 'America/New_York', CONFIG_FILE: example('config.yaml'),
+  TIMEZONE: 'America/New_York', CONFIG_FILE: example('config.yaml'), THEMES_DIR: 'none', // none: never your own theme art
   SHOPPING_SOURCE: 'file', SHOPPING_FILE: example('shopping.json'),
 });
 
@@ -39,13 +39,17 @@ await save('timeline.png', await render(await at('2026-04-09T16:00:00Z'), { geom
 // The same day with theming off.
 await save('paper-plain.png', await render(await at('2026-04-09T16:00:00Z'), { geometry, layout: 'paper', theme: 'none', art }));
 
-// The top of the paper layout in each month's default theme.
-const days = [15, 14, 17, 5, 15, 15, 4, 15, 15, 31, 26, 25];
-const tiles = [];
-for (let m = 1; m <= 12; m++) {
-  const png = await render(await at(new Date(Date.UTC(2026, m - 1, days[m - 1], 16)).toISOString()), { geometry, layout: 'paper', theme: 'auto', art });
-  tiles.push(await sharp(png).extract({ left: 0, top: 0, width: 1440, height: 640 }).resize(700).png().toBuffer());
+// The top of the paper layout, as tiles of 2 columns: the twelve month designs (a day in each month outside any holiday window),
+// then the holiday windows.
+async function tileSheet(name, dates) {
+  const tiles = [];
+  for (const date of dates) {
+    const png = await render(await at(`${date}T16:00:00Z`), { geometry, layout: 'paper', theme: 'auto', art });
+    tiles.push(await sharp(png).extract({ left: 0, top: 0, width: 1440, height: 640 }).resize(700).png().toBuffer());
+  }
+  const th = (await sharp(tiles[0]).metadata()).height, rows = Math.ceil(tiles.length / 2);
+  await save(name, await sharp({ create: { width: 1410, height: rows * (th + 10), channels: 3, background: '#ffffff' } })
+    .composite(tiles.map((input, i) => ({ input, left: (i % 2) * 710, top: Math.floor(i / 2) * (th + 10) }))).png({ palette: false, compressionLevel: 9 }).toBuffer());
 }
-const th = (await sharp(tiles[0]).metadata()).height;
-await save('themes.png', await sharp({ create: { width: 1410, height: 6 * (th + 10), channels: 3, background: '#ffffff' } })
-  .composite(tiles.map((input, i) => ({ input, left: (i % 2) * 710, top: Math.floor(i / 2) * (th + 10) }))).png({ palette: false, compressionLevel: 9 }).toBuffer());
+await tileSheet('themes.png', ['2026-01-15', '2026-02-20', '2026-03-03', '2026-04-15', '2026-05-15', '2026-06-15', '2026-07-15', '2026-08-15', '2026-09-15', '2026-10-15', '2026-11-03', '2026-12-03']);
+await tileSheet('holidays.png', ['2026-02-14', '2026-03-17', '2026-04-05', '2026-07-04', '2026-10-31', '2026-11-26', '2026-12-25', '2026-12-31']);
