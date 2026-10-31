@@ -4,6 +4,7 @@
  *   <dir>/<theme>/header.png        the banner behind the date (1440 x 227 px at the default size)
  *   <dir>/<theme>/footer.png        the strip behind the legend (1440 x 112 px)
  *   <dir>/<theme>/motifs/<name>.png one small picture instead of a generated motif (egg, pumpkin, ...)
+ *   <dir>/<scene>/poster.png        the whole picture for a holiday takeover (1440 x 2560 px), in place of the built-in scene
  *   <dir>/<month>/...               the same for a month (jan ... dec), for any theme that month without its own file
  *   <dir>/default/...               the same, for any theme without a file of its own or its month's
  *
@@ -56,4 +57,10 @@ export async function loadThemeArt(themeName, { month = null, dirs = themeDirs()
   const motifs = new Map();
   for (const name of MOTIF_NAMES) { const image = await find(path.join('motifs', `${name}.png`)); if (image) motifs.set(name, image); }
   return { header: await find('header.png'), footer: await find('footer.png'), motifs };
+}
+
+/** Your own picture for a holiday takeover (`<dir>/<scene>/poster.png`), or null. */
+export async function loadPoster(scene, { dirs = themeDirs() } = {}) {
+  for (const dir of dirs) { const image = await readImage(path.join(dir, scene, 'poster.png')); if (image) return image; }
+  return null;
 }

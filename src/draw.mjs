@@ -22,12 +22,9 @@ import { drawMotif, drawScene, drawCellDecor, stampsFor } from './themes.mjs';
 export const INK = { red: RED, green: GREEN, blue: BLUE, black: BLACK, yellow: YELLOW };
 /** Text color that reads on a fill of this ink. (Green is white: on the panel its green is much darker than on a screen.) */
 export const ON = { red: WHITE, blue: WHITE, black: WHITE, green: WHITE, yellow: BLACK };
-/** A yellow fill gets a black outline: against white paper it is too faint alone. Green does not: it is bright enough, and an
- * outline would hide most of a thin mark and darken the panel's own green. */
-export const outlined = (ink) => ink === 'yellow';
-/** The black outline of a small color chip (a legend square, a dot): every color but green, which stays the panel's green. */
-function chipEdge(ctx, ink, x, y, w, h) {
-  if (ink === 'green') return;
+/** The black outline of a small color chip (a legend square, a dot): every color gets one, so a small mark stays distinct from the paper.
+ * Bars and blocks get none: the inks print vibrantly on their own. */
+function chipEdge(ctx, x, y, w, h) {
   ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); ctx.strokeRect(x, y, w, h);
 }
 
@@ -196,7 +193,7 @@ export function drawHeader(ctx, model, w, S) {
     const rx = w - px(MARGIN) - lw - px(18);
     const y = startY + i * rowH;
     ctx.fillStyle = INK[c.color]; ctx.fillRect(rx, y + px(3), sw, sw);
-    chipEdge(ctx, c.color, rx, y + px(3), sw, sw);
+    chipEdge(ctx, rx, y + px(3), sw, sw);
     ctx.fillStyle = BLACK; ctx.fillText(label, rx + px(18), y + px(14));
   });
 
@@ -268,7 +265,7 @@ export function drawFooter(ctx, model, w, h, S) {
   let x = px0 + px(15);
   for (const { c, label } of entries) {
     ctx.fillStyle = INK[c.color]; ctx.fillRect(x, py0 + px(9), px(12), px(12));
-    chipEdge(ctx, c.color, x, py0 + px(9), px(12), px(12));
+    chipEdge(ctx, x, py0 + px(9), px(12), px(12));
     ctx.fillStyle = BLACK; ctx.font = F.regular(font); ctx.fillText(label, x + px(18), py0 + px(20));
     x += px(12) + px(6) + width(ctx, label, F.regular(font)) + px(18);
   }
@@ -384,7 +381,6 @@ export function drawMonth(ctx, model, x, y, w, h, S, { compact = false } = {}) {
       const ink = bar.cal.color;
       const shape = { bx, bxEnd, by, h: BAR_H, r: px(5), tip: px(8), contL: bar.contL, contR: bar.contR };
       ctx.fillStyle = INK[ink]; barShape(ctx, shape); ctx.fill();
-      if (outlined(ink)) { ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); barShape(ctx, shape); ctx.stroke(); }
       ctx.fillStyle = ON[ink]; ctx.font = F.bold(13);
       const padL = bar.contL ? px(11) : px(6), padR = bar.contR ? px(11) : px(6);
       drawText(ctx, fit(ctx, bar.ev.title, F.bold(13), bw - padL - padR), bx + padL, by + px(14));
@@ -404,7 +400,6 @@ export function drawMonth(ctx, model, x, y, w, h, S, { compact = false } = {}) {
         // The bar starts where an all-day bar's left edge does, and the title's first letter where an all-day bar's title does.
         const ly = top + NUM_H + free[i] * LINE_H, ink = ev.cal.color, bx = cx + px(2);
         ctx.fillStyle = INK[ink]; ctx.fillRect(bx, ly + px(1), px(4), px(17));
-        if (outlined(ink)) { ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); ctx.strokeRect(bx, ly + px(1), px(4), px(17)); }
         ctx.fillStyle = BLACK; ctx.font = F.regular(13);
         drawText(ctx, fit(ctx, ev.title, F.regular(13), colW - px(14)), cx + px(2) + px(6), ly + px(14));
       });
@@ -421,7 +416,7 @@ export function drawMonth(ctx, model, x, y, w, h, S, { compact = false } = {}) {
         const dy = top + rowH - px(12);
         dotted.slice(0, showDots).forEach((ev, i) => {
           ctx.fillStyle = INK[ev.cal.color]; ctx.fillRect(cx + px(6) + i * step, dy, dot, dot);
-          chipEdge(ctx, ev.cal.color, cx + px(6) + i * step, dy, dot, dot);
+          chipEdge(ctx, cx + px(6) + i * step, dy, dot, dot);
         });
         const more = dotted.length - showDots + hiddenBars;
         if (more > 0) { ctx.fillStyle = BLACK; ctx.font = F.bold(11); ctx.fillText(`+${more}`, cx + px(6) + showDots * step, dy + px(9)); }
@@ -479,7 +474,7 @@ export function timeLabel(ev, key) {
   return [clock(ev.start), `– ${clock(ev.end)}`];
 }
 
-export function drawAgenda(ctx, model, x, y, w, h, S) {
+export function drawAgenda(ctx, model, x, y, w, h, S, { comingUp = true } = {}) {
   const bottom = y + h;
   let cy = panelHeader(ctx, x, y, w, 'TODAY', longDay(model.today), S);
   const today = dayAgenda(model, model.today);
@@ -497,7 +492,6 @@ export function drawAgenda(ctx, model, x, y, w, h, S) {
     const h2 = Math.max(titleH + shown.length * px(19) + px(12), px(50)); // at least the two-line time label
     if (h2 > maxH) return 0;
     ctx.fillStyle = INK[ink]; ctx.fillRect(x, cy + px(3), px(5), h2 - px(8));
-    if (outlined(ink)) { ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); ctx.strokeRect(x, cy + px(3), px(5), h2 - px(8)); }
     const [t1, t2] = timeLabel(ev, key);
     ctx.fillStyle = BLACK; ctx.font = F.bold(16); drawText(ctx, fit(ctx, t1, F.bold(16), timeW - px(4)), x + px(12), cy + px(22));
     ctx.font = F.regular(14); drawText(ctx, fit(ctx, t2, F.regular(14), timeW - px(4)), x + px(12), cy + px(41));
@@ -530,7 +524,8 @@ export function drawAgenda(ctx, model, x, y, w, h, S) {
     cy += px(24);
   }
 
-  if (bottom - cy > px(70)) drawComingUp(ctx, model, x, cy + px(6), w, bottom, S);
+  if (comingUp && bottom - cy > px(70)) cy = drawComingUp(ctx, model, x, cy + px(6), w, bottom, S) ?? cy;
+  return cy; // where the content ends
 }
 
 /** The next days that have anything on, a line per event, as far as the room goes. */
@@ -546,7 +541,7 @@ export function drawComingUp(ctx, model, x, y, w, bottom, S, { span = 14, title 
       // A multi-day event reads "Day 2/4" on its later days; its dates are in the heading of its first.
       const t1 = ev.allDay && ev.endDay > ev.startDay ? `Day ${diffDays(ev.startDay, day.key) + 1}/${diffDays(ev.startDay, ev.endDay) + 1}` : timeLabel(ev, day.key)[0];
       ctx.fillStyle = INK[ev.cal.color]; ctx.fillRect(x + px(10), cy + px(5), px(9), px(9));
-      chipEdge(ctx, ev.cal.color, x + px(10), cy + px(5), px(9), px(9));
+      chipEdge(ctx, x + px(10), cy + px(5), px(9), px(9));
       ctx.fillStyle = BLACK; ctx.font = F.regular(14);
       ctx.fillText(t1, x + px(26), cy + px(15));
       drawText(ctx, fit(ctx, ev.title, F.regular(14), w - px(26) - px(86) - px(8)), x + px(26) + px(88), cy + px(15));

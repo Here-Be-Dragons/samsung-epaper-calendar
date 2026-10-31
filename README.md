@@ -19,6 +19,7 @@ redraws the panel only when something changed. Home Assistant can decide *when* 
 
 - **Month grid** with multi-day events as one bar that wraps across weeks, timed events as titles with a thin bar in the calendar's color, per-calendar colors, red Sundays and holidays.
 - **Today's agenda** with location, video link, guests and notes, plus **coming up** and a **shopping list** (JSON/text file or Google Tasks).
+- **Holiday posters:** on the big days (Valentine's, St. Patrick's, Easter, Fourth of July, Halloween, Thanksgiving, Christmas, New Year) the calendar steps aside for a full-screen illustration and just today's agenda. [Draw your own](#holiday-posters).
 - **Two layouts** (`paper`, `timeline`) and a **theme for every month plus the holidays** (full color; Easter only around Easter, Halloween only the last week of October): [make your own](#themes) in the config file, with your own header and footer artwork if you like.
 - **Sends only what changed.** The picture never depends on the time of day, so it changes when your calendar does or the date turns.
 - **Wakes a sleeping panel** (Wake-on-LAN), waits until it has really fetched the picture, reads its battery, and can let it sleep again.
@@ -117,12 +118,38 @@ are drawn pictures with their own colors; to change one, or the whole banner and
   <a href="docs/images/holidays.png"><img src="docs/images/holidays.png" width="320" alt="The holiday themes"></a>
 </p>
 
+### Holiday posters
+
+On the day itself, the calendar is replaced by a poster: one big illustration, a greeting, and only today's agenda on a plaque at the
+bottom. Valentine's Day, St. Patrick's Day, Easter, the Fourth of July, Halloween, Thanksgiving, Christmas and New Year are built in.
+
+<p>
+  <a href="docs/images/posters.png"><img src="docs/images/posters.png" width="640" alt="The eight holiday posters"></a>
+</p>
+
+Turn them off with `TAKEOVERS=off`, or choose your own days in the config file:
+
+```yaml
+themes:
+  takeovers:                     # yours come before the built-in ones
+    - { from: 12-24, to: 12-26, scene: christmas }                    # Christmas for three days
+    - { from: 06-14, scene: birthday, greeting: [HAPPY, BIRTHDAY] }   # a scene of your own, below
+  builtin_takeovers: true        # false: only your takeovers
+```
+
+**Replace a poster with your own graphic**, in the same way as the header and footer: save a **1440 x 2560 px PNG** as
+`themes/<scene>/poster.png`, for example `themes/halloween/poster.png` to replace the built-in Halloween scene, or
+`themes/birthday/poster.png` for the `birthday` scene above (with Docker, use `config/themes/` in the mounted config folder, so no
+rebuild is needed). The agenda plaque covers the bottom of the picture, so keep what matters above it; `npm run art-guides` writes
+`themes/guides/poster-guide.png` with the covered parts marked. Your picture is shown as drawn, with no lettering added unless the
+takeover has a `greeting`. Sizes, names and the covered zones are in [themes/README.md](themes/README.md).
+
 ## Documentation
 
 | | |
 |---|---|
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | The config file, calendars, layouts, themes, shopping list, redraw modes, battery and waking settings, Home Assistant entities |
-| [themes/README.md](themes/README.md) | Drawing your own header, footer and motif PNGs for the themes |
+| [themes/README.md](themes/README.md) | Drawing your own header, footer, motif and holiday poster PNGs |
 | [PROTOCOL.md](PROTOCOL.md) | What we know about the panel: MDC session and commands, manifest, waking, sleep, battery |
 | [docs/PANEL-LAB.md](docs/PANEL-LAB.md) | `scripts/panel_lab.py`: test your own panel (wake, battery, push, drain) |
 | [CLAUDE.md](CLAUDE.md) | Notes for contributors and AI assistants: design rules and code layout |

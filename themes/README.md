@@ -24,6 +24,26 @@ it, and define your own, in the config file.
 pumpkin, ghost, bat, moon, acorn, tree, ornament, star, snowflake, snowman, gift, candycane, sun, wave, palm, beachball, leaf,
 apple, pencil, book, fireworks.
 
+## Holiday posters
+
+On a holiday the calendar gives way to a full-screen poster with only today's agenda on a plaque (see "Holiday posters" in
+docs/CONFIGURATION.md for the dates). Draw your own and it replaces the built-in scene:
+
+```
+themes/
+  halloween/poster.png    1440 x 2560 px: replaces the built-in Halloween scene (valentine, shamrock, easter, patriotic,
+                          thanksgiving, christmas and newyear are the others)
+  birthday/poster.png     a scene of your own: name it in the config file, `takeovers: [{ from: 06-14, scene: birthday }]`
+```
+
+- **Draw at 1440 x 2560** (a different size is scaled to cover the screen and centered).
+- **The agenda plaque covers the bottom**: at least the lowest 330 px, up to about 1075 px on a day with a long agenda. Keep what matters
+  above y = 1450. `npm run art-guides` writes `themes/guides/poster-guide.png` with these zones marked.
+- **No lettering is added to your picture** unless you ask: put the greeting in the picture, or give the takeover a `greeting`
+  (`greeting: [HAPPY, BIRTHDAY]`), which prints one or two outlined lines over the top (about y = 100 to 480) and the date under them.
+- Use full color; the panel dithers it like the other art. Big flat areas, black outlines and strong colors come out best on six inks.
+- The same folders are searched as for the header and footer, and the file is read again when it changes.
+
 ## Sizes and what is drawn over your art
 
 - **Draw at the size above** (for a 1440 x 2560 panel). A different size is scaled to cover the space and centered, so

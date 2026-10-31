@@ -48,7 +48,16 @@ const footer = guide(W, FOOTER, [
   [0, 0, W, Math.round(px(4)), 'theme line'],
 ], 'footer.png');
 
+// The poster: the greeting (when the takeover asks for one) over the top, the agenda plaque over the bottom.
+const PW = geometry.width, PH = geometry.height, margin = Math.round(px(30));
+const poster = guide(PW, PH, [
+  [margin, Math.round(px(100)), PW - 2 * margin, Math.round(px(380)), 'greeting and date: only if the takeover has a greeting (outlined lettering, centered)'],
+  [margin, PH - margin - Math.round(PH * 0.42), PW - 2 * margin, Math.round(PH * 0.42) - Math.round(px(330)), 'the plaque grows into this much on a day with a long agenda'],
+  [margin, PH - margin - Math.round(px(330)), PW - 2 * margin, Math.round(px(330)), 'the agenda plaque: always covered (white, rounded)'],
+], 'poster.png');
+
 fs.mkdirSync(out, { recursive: true });
+fs.writeFileSync(path.join(out, 'poster-guide.png'), poster);
 fs.writeFileSync(path.join(out, 'header-guide.png'), header);
 fs.writeFileSync(path.join(out, 'footer-guide.png'), footer);
 console.log(`wrote ${path.join(out, 'header-guide.png')} (${W} x ${HEADER}) and ${path.join(out, 'footer-guide.png')} (${W} x ${FOOTER})`);

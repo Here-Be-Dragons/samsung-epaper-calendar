@@ -9,10 +9,11 @@ import * as config from './config.mjs';
 import { useGeometry } from './geometry.mjs';
 import { serial } from './queue.mjs';
 import { ensureFonts, useFont, addFontSet, fontSetNames, dressContext, styleFor, drawFooter } from './draw.mjs';
-import { resolveTheme, useMotifImages, MONTH_KEYS } from './themes.mjs';
-import { loadThemeArt } from './themeArt.mjs';
+import { resolveTheme, resolveTakeover, useMotifImages, MONTH_KEYS } from './themes.mjs';
+import { loadThemeArt, loadPoster } from './themeArt.mjs';
+import { POSTER_SCENES } from './scenes.mjs';
 import { createQuantizer } from './quantize.mjs';
-import { LAYOUTS, DEFAULT_LAYOUT } from './layouts.mjs';
+import { LAYOUTS, DEFAULT_LAYOUT, FULL_BLEED } from './layouts.mjs';
 
 export { ensureFonts, addFontSet, fontSetNames };
 
@@ -30,12 +31,21 @@ const quantizerFor = (art, text, alphaCut) => {
  * of `model.today` (auto, none, or a theme name; `plan` holds the months, holiday windows and custom themes). Frames
  * render one at a time because px() reads the current geometry.
  */
-export function render(model, { geometry, layout = DEFAULT_LAYOUT, theme = config.THEME, plan = config.THEME_PLAN, art: artMode = config.ART_DITHER, font = config.FONT, text: textMode = config.TEXT_AA, textCut = config.TEXT_CUT, breakHours = config.TIMELINE_BREAK_HOURS, ambientHours = config.TIMELINE_AMBIENT_HOURS }) {
-  const draw = LAYOUTS[layout];
-  if (!draw) throw new Error(`Unknown layout "${layout}"`);
+export function render(model, { geometry, layout: asked = DEFAULT_LAYOUT, theme = config.THEME, plan = config.THEME_PLAN, art: artMode = config.ART_DITHER, font = config.FONT, text: textMode = config.TEXT_AA, textCut = config.TEXT_CUT, breakHours = config.TIMELINE_BREAK_HOURS, ambientHours = config.TIMELINE_AMBIENT_HOURS, dayStart = config.TIMELINE_DAY_START, dayEnd = config.TIMELINE_DAY_END, takeover = config.TAKEOVERS }) {
+  if (!LAYOUTS[asked]) throw new Error(`Unknown layout "${asked}"`);
   if (!config.TEXT_MODES.includes(textMode)) throw new Error(`Unknown text mode "${textMode}". Available: ${config.TEXT_MODES.join(', ')}`);
   if (!config.ART_MODES.includes(artMode)) throw new Error(`Unknown art mode "${artMode}". Available: ${config.ART_MODES.join(', ')}`);
   return renderQueue(async () => {
+    // On a holiday with a takeover (theme auto), the poster layout replaces the chosen one; a scene that is neither built in nor
+    // drawn by you (themes/<scene>/poster.png) leaves the calendar alone.
+    let layout = asked;
+    let held = takeover && theme === 'auto' ? resolveTakeover(model.today, plan) : null, picture = null;
+    if (held) {
+      picture = await loadPoster(held.scene);
+      if (!picture && !POSTER_SCENES[held.scene]) held = null;
+    }
+    if (held) layout = 'poster';
+    const draw = LAYOUTS[layout];
     ensureFonts();
     useFont(font);
     useGeometry(geometry);
@@ -46,12 +56,14 @@ export function render(model, { geometry, layout = DEFAULT_LAYOUT, theme = confi
     dressContext(ctx);
     const S = styleFor(resolveTheme(theme, model.today, plan), art);
     S.plan = plan;
+    S.takeover = held && { ...held, picture };
     S.breakHours = breakHours;
     S.ambientHours = ambientHours;
+    S.dayStart = dayStart; S.dayEnd = dayEnd;
     S.images = S.theme ? await loadThemeArt(S.theme.name, { month: MONTH_KEYS[Number(model.today.slice(5, 7)) - 1] }) : null; // your own PNGs for this theme, if any
     useMotifImages(S.images?.motifs);
     draw(ctx, model, { w, h, S });
-    drawFooter(ctx, model, w, h, S);
+    if (!FULL_BLEED.has(layout)) drawFooter(ctx, model, w, h, S);
     const quantizer = quantizerFor(artMode, textMode, textCut);
     const rgb = quantizer.compose(art.getImageData(0, 0, w, h).data, ctx.getImageData(0, 0, w, h).data, w, h);
     return encodeFrame(rgb, w, h, geometry.rotation, { exactInks: quantizer.exactInks });

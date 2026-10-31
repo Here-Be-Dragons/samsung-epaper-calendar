@@ -136,7 +136,7 @@ test('every theme renders in every layout', async () => {
   const geometry = geometryFor({ width: 480, height: 854, rotation: 0 });
   const seen = new Set();
   for (const layout of LAYOUT_NAMES) for (const theme of ['none', 'auto', ...THEME_NAMES]) {
-    const img = await render(model, { geometry, layout, theme });
+    const img = await render(model, { geometry, layout, theme, takeover: false }); // the poster has its own test (takeovers.test.mjs)
     assert.ok(img.length > 1000, `${layout}/${theme}`);
     seen.add(img.length);
   }

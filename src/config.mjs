@@ -82,6 +82,10 @@ export const TIMELINE_AMBIENT_HOURS = Math.max(0, int('TIMELINE_AMBIENT_HOURS', 
 // (default 3; 0: every hour is drawn). If the hours still cannot be drawn legibly, the day is listed in time order instead
 // (that fallback is on while either setting is above 0).
 export const TIMELINE_BREAK_HOURS = Math.max(0, int('TIMELINE_BREAK_HOURS', 3));
+// Timeline layout: the hours of the day it always shows, widened only if an event falls outside them (default 7 AM to 9 PM), so a day with
+// one event is not squeezed into a few hours.
+export const TIMELINE_DAY_START = Math.min(23, Math.max(0, int('TIMELINE_DAY_START', 7)));
+export const TIMELINE_DAY_END = Math.min(24, Math.max(TIMELINE_DAY_START + 1, int('TIMELINE_DAY_END', 21)));
 export const JPEG_QUALITY = int('JPEG_QUALITY', 100);
 
 // --- HTTP server -------------------------------------------------------------
@@ -135,6 +139,8 @@ export const LAYOUT = (process.env.LAYOUT || 'paper').toLowerCase();
 // change it at run time. The `themes:` section of the config file sets which theme each month wears (months), your own holiday
 // windows, and your own themes (custom); THEME_JAN ... THEME_DEC set a month's theme from the environment (the file wins).
 export const THEME = (process.env.THEME || 'auto').toLowerCase();
+// TAKEOVERS=off keeps the calendar on holidays: no full-picture holiday poster (see themes.takeovers in the config file).
+export const TAKEOVERS = !['off', 'false', '0', 'no'].includes((process.env.TAKEOVERS || 'on').toLowerCase());
 const envMonths = Object.fromEntries(MONTH_KEYS.map((m) => [m, (process.env[`THEME_${m.toUpperCase()}`] || '').trim().toLowerCase()]).filter(([, name]) => name));
 export const THEME_PLAN = buildThemePlan({ ...fileData.themes, months: { ...envMonths, ...(fileData.themes?.months ?? {}) } }, configPath ? `${configPath}: themes` : 'themes');
 if (THEME !== 'auto' && THEME !== 'none' && !THEME_PLAN.names.includes(THEME)) throw new Error(`THEME must be auto, none, or one of ${THEME_PLAN.names.join(', ')} (got "${THEME}")`);

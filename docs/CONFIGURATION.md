@@ -28,12 +28,14 @@ Pick one with `LAYOUT` (or `DISPLAY_<ID>_LAYOUT`, or the **Layout** selector in 
 | Layout | What it is |
 |---|---|
 | `paper` (default) | A printed wall calendar: colored weekday band, boxed days, red Sundays and holidays, then today's agenda and the shopping list. |
+| `poster` | A holiday takeover: a full-bleed illustrated scene with a big greeting and only today's agenda on a plaque at the bottom. It replaces the chosen layout on the holiday itself (see [Holiday posters](#holiday-posters)), and you can pick it as a layout to see one: `/preview?layout=poster&now=2026-10-31T12:00:00Z`. |
 | `timeline` | A compact month (shorter rows: all-day bars first, then as many timed titles as fit, then a colored dot for each one that does not), then today hour by hour (blocks sized by duration, overlaps side by side) beside Coming up and the shopping list. See below for long and crowded days. |
 
 **A long or crowded day in the timeline.** The hour-by-hour view stays readable in four ways:
 - A timed event as long as `TIMELINE_AMBIENT_HOURS` (default 24: a whole day, such as a 24/7 gym) is shown as an all-day chip above the hours, like Google Calendar does. It does not stretch the hours or take lane width. A long event shorter than that stays a block.
 - Overlapping events cascade, as in Google Calendar, instead of splitting the width into equal columns: each event lies over the earlier ones with a thin white border, reaches the right edge, and starts a little to the right of the event it overlaps. If it begins within that event's title it starts just past the end of the title, so it never covers text; if it begins below the title it covers more of the event. Titles are clipped where the next event begins.
-- A run of `TIMELINE_BREAK_HOURS` (default 3) or more empty hours is folded into one thin break row (`1 AM - 9 AM`), so the busy part of the day keeps its height. An hour is empty if no event overlaps it.
+- The timeline always shows your normal day, `TIMELINE_DAY_START` to `TIMELINE_DAY_END` (default 7 AM to 9 PM), and widens only if an event falls outside it, so a day with one event is not squeezed into a few hours.
+- A run of `TIMELINE_BREAK_HOURS` (default 3) or more empty hours between two events is folded into one thin break row (`1 PM - 6 PM`), so the busy parts of the day keep their height. Empty hours at the start and end of the normal day are never folded. An hour is empty if no event overlaps it.
 - If the hours still cannot be drawn legibly (an hour would be under about 54 px, or more than six events overlap at once), today is listed in time order instead, with every event on its own line (squeezed to fit; "+N more" only past about two dozen).
 
 Set either setting to 0 to turn it off; with both at 0 the day is always drawn as hours. An event that ends exactly at midnight runs to the end of the day.
@@ -98,6 +100,9 @@ themes:
   builtin_windows: true          # false: only your windows
   marks:                         # a decorated day cell on a date, every year, in any theme
     "05-14": { motif: star, tint: "#fff3c4", deco: ["#f5b700"] }
+  takeovers:                     # holiday posters, see "Holiday posters" below; yours come before the built-in ones
+    - { from: 06-14, scene: birthday, greeting: [HAPPY, BIRTHDAY] }   # picture: themes/birthday/poster.png
+  builtin_takeovers: true        # false: only your takeovers
   custom:                        # your own themes
     october-night:
       extends: halloween         # start from a built-in or earlier custom theme (optional)
@@ -135,6 +140,36 @@ size with the parts the date and legend plates will cover marked. The date (cent
 and the weekday band keeps the theme's color. Art in `themes/` ships in the Docker image; art in `config/themes/` is
 picked up from the mounted folder without a rebuild, and changes show on the next refresh. The names, sizes and rules
 are in [themes/README.md](../themes/README.md).
+
+### Holiday posters
+
+On the holiday itself the whole calendar gives way to a **poster**: a full-bleed picture, a big greeting, and only today's agenda on
+a plaque at the bottom (the `poster` layout). Eight are built in, one per holiday, each on the day only:
+
+| Scene | Day | Greeting |
+|---|---|---|
+| `valentine` | Feb 14 | HAPPY VALENTINE'S DAY |
+| `shamrock` | Mar 17 | HAPPY ST. PATRICK'S DAY |
+| `easter` | Easter Sunday | HAPPY EASTER |
+| `patriotic` | Jul 4 | HAPPY 4TH OF JULY |
+| `halloween` | Oct 31 | HAPPY HALLOWEEN |
+| `thanksgiving` | 4th Thursday of November | HAPPY THANKSGIVING |
+| `christmas` | Dec 25 | MERRY CHRISTMAS |
+| `newyear` | Dec 31 and Jan 1 | HAPPY NEW YEAR |
+
+- **Turn them off** with `builtin_takeovers: false` (and list only your own), or `TAKEOVERS=off` for no posters at all. A poster
+  is used only with `THEME=auto`: a display fixed to one theme, or to none, keeps its calendar.
+- **Your own dates** go in `themes.takeovers`: `from` and `to` (`MM-DD`, or `easter` / `thanksgiving` with an offset in days; `to`
+  defaults to `from`), the `scene`, and optionally a `greeting` of one or two lines (`false` for none). Yours come before the built-in ones,
+  so `{ from: 12-24, to: 12-26, scene: christmas }` stretches Christmas over three days.
+- **Your own picture** replaces a built-in scene, or makes a new one: save a 1440 x 2560 PNG as `themes/<scene>/poster.png`
+  (`themes/halloween/poster.png`; for a scene of your own, any name you give a takeover, such as `birthday`). It is searched for in the
+  same folders as the header and footer art (`THEMES_DIR`, `/config/themes`, `./config/themes`, `themes/`) and read again when it
+  changes. The agenda plaque is drawn over the bottom, so keep what matters above it (`npm run art-guides` writes `poster-guide.png`
+  with the covered parts marked). **A picture of your own is left bare**, with no greeting, unless the takeover gives a `greeting`
+  (letters are outlined in yellow, so they read on any picture). A takeover whose scene is neither built in nor has a `poster.png` is ignored
+  and the calendar is shown.
+- `/preview?now=2026-10-31T12:00:00Z` shows a holiday's poster without touching the panel, and `&takeover=off` the calendar on that day.
 
 The theme can change on any day (when a holiday window starts or ends, as well as at the turn of the month), which is one more
 reason the picture changes at midnight. The built-in themes live in `src/themes.mjs`: a chrome color, a sky, a pattern, a ground and

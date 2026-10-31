@@ -44,7 +44,7 @@ User docs: `README.md`, `docs/CONFIGURATION.md`. What is known about the panel: 
   (http(s) or a local file), expansion, `buildMonth`, `dayAgenda`, `upcomingDays`; `src/draw.mjs` the drawing parts
   (header, month grid, agenda, coming up, shopping); `src/themes.mjs` the themes (a design per month, holiday themes, motifs), `buildThemePlan` (your `themes:` settings: months, holiday windows, custom themes) and `resolveTheme` (by date); `src/themeArt.mjs` loads the user's own header/footer/motif PNGs
   (`themes/`, `config/themes/`, `THEMES_DIR`) that replace the generated scenery, and `scripts/art-template.mjs` makes the guides to draw them over;
-  `src/layouts.mjs` the two layouts (paper, timeline) built from those parts; `src/render.mjs` frame + encoding;
+  `src/layouts.mjs` the layouts (paper, timeline, poster) built from those parts; `src/scenes.mjs` and `src/scenes/*.mjs` the eight full-bleed holiday scenes of the `poster` layout (a holiday takeover: `BUILTIN_TAKEOVERS`/`resolveTakeover` in `themes.mjs`, replaced per scene by the user's `themes/<scene>/poster.png`, `loadPoster`; takeovers apply only with `THEME=auto`); `src/render.mjs` frame + encoding;
   `src/controller.mjs` change detection, redraw pending, auto/manual mode, the optional state file; `src/mqtt.mjs`
   Home Assistant discovery, state and commands; `src/shopping.mjs` the list sources; `src/server.mjs` displays,
   delivery, HTTP routes.

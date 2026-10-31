@@ -598,19 +598,35 @@ export const BUILTIN_WINDOWS = [
   { from: '12-12', to: '12-26', theme: 'christmas' },
 ];
 
+/**
+ * Built-in takeovers: on the holiday itself the poster layout (a full-bleed holiday picture and only today's agenda) replaces the
+ * calendar. `scene` names a built-in scene (src/scenes/) or your own picture, themes/<scene>/poster.png.
+ */
+export const BUILTIN_TAKEOVERS = [
+  { from: '02-14', to: '02-14', scene: 'valentine' },
+  { from: '03-17', to: '03-17', scene: 'shamrock' },
+  { from: 'easter', to: 'easter', scene: 'easter' },
+  { from: '07-04', to: '07-04', scene: 'patriotic' },
+  { from: '10-31', to: '10-31', scene: 'halloween' },
+  { from: 'thanksgiving', to: 'thanksgiving', scene: 'thanksgiving' },
+  { from: '12-25', to: '12-25', scene: 'christmas' },
+  { from: '12-31', to: '01-01', scene: 'newyear' },
+];
+
 /** The theme name of the first window that holds `day` (YYYY-MM-DD), or null. Windows repeat every year and may span new year. */
-function windowTheme(day, windows) {
+function windowHolding(day, windows) {
   const year = Number(day.slice(0, 4));
   for (const w of windows) {
     for (const y of [year - 1, year, year + 1]) {
       const from = dateSpec(w.from, y);
       let to = dateSpec(w.to, y);
       if (to < from) to = dateSpec(w.to, y + 1);
-      if (day >= from && day <= to) return w.theme;
+      if (day >= from && day <= to) return w;
     }
   }
   return null;
 }
+const windowTheme = (day, windows) => windowHolding(day, windows)?.theme ?? null;
 
 /** Every built-in holiday's decorated cell, whatever the theme (Easter Sunday has its bunny in any April design). */
 const builtinMarks = (year) => Object.assign({}, ...Object.values(THEMES).map((t) => t.marks?.(year) ?? {}));
@@ -622,7 +638,7 @@ const PATTERN_KINDS = ['dots', 'confetti', 'snow', 'stars', 'hearts', 'leaves', 
 const GROUND_KINDS = ['hills', 'snow', 'waves', 'stripes'];
 const NAME = /^[a-z0-9][a-z0-9_-]*$/;
 const CUSTOM_KEYS = ['label', 'extends', 'chrome', 'sky', 'pattern', 'ground', 'motifs', 'holidays'];
-const THEMES_KEYS = ['months', 'windows', 'builtin_windows', 'custom', 'marks'];
+const THEMES_KEYS = ['months', 'windows', 'builtin_windows', 'custom', 'marks', 'takeovers', 'builtin_takeovers'];
 
 function checkKeys(obj, allowed, where) {
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error(`${where} must be a map`);
@@ -720,7 +736,22 @@ export function buildThemePlan(settings = {}, where = 'themes') {
   });
   if (settings.builtin_windows !== false) windows.push(...BUILTIN_WINDOWS);
   const marks = marksFn(settings.marks, `${where}.marks`);
-  return { themes, names: Object.keys(themes), months, windows, marks };
+  if (settings.takeovers !== undefined && !Array.isArray(settings.takeovers)) throw new Error(`${where}.takeovers must be a list`);
+  const takeovers = (settings.takeovers ?? []).map((t, i) => {
+    const at = `${where}.takeovers[${i}]`;
+    checkKeys(t, ['from', 'to', 'scene', 'greeting'], at);
+    for (const end of ['from', 'to']) { try { dateSpec(String(t[end] ?? t.from), 2026); } catch (err) { throw new Error(`${at}.${end}: ${err.message}`); } }
+    if (!NAME.test(String(t.scene ?? ''))) throw new Error(`${at}.scene must name a scene (letters, digits, - and _): a built-in one or your own, themes/<scene>/poster.png`);
+    let greeting;
+    if (t.greeting !== undefined) {
+      const g = t.greeting === false || t.greeting === 'none' ? [] : [].concat(t.greeting).map((l) => String(l).toUpperCase());
+      if (g.length > 2 || g.some((l) => !l.trim())) throw new Error(`${at}.greeting must be one or two lines of text, or false for none`);
+      greeting = g;
+    }
+    return { from: String(t.from), to: String(t.to ?? t.from), scene: String(t.scene), ...(greeting ? { greeting } : {}) };
+  });
+  if (settings.builtin_takeovers !== false) takeovers.push(...BUILTIN_TAKEOVERS);
+  return { themes, names: Object.keys(themes), months, windows, marks, takeovers };
 }
 
 export const DEFAULT_PLAN = buildThemePlan();
@@ -741,6 +772,12 @@ export function resolveTheme(setting, day, plan = DEFAULT_PLAN) {
   }
   if (name === 'none' || !Object.hasOwn(plan.themes, name)) return null;
   return plan.themes[name];
+}
+
+/** The takeover that holds `day` ({ scene, greeting? }: the poster layout replaces the calendar), or null. Yours come before the built-in ones. */
+export function resolveTakeover(day, plan = DEFAULT_PLAN) {
+  const t = windowHolding(day, plan.takeovers ?? []);
+  return t ? { scene: t.scene, ...(t.greeting ? { greeting: t.greeting } : {}) } : null;
 }
 
 /** The decorated cells for a list of day keys: Map('YYYY-MM-DD' -> mark). None without a theme. */

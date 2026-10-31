@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { dayMinutes, cascade } from '../src/layouts.mjs';
+import { dayMinutes, cascade, visibleHours, hourRows } from '../src/layouts.mjs';
 import { render } from '../src/render.mjs';
 import { geometryFor } from '../src/geometry.mjs';
 
@@ -66,4 +66,22 @@ test('an event exactly 24 hours long becomes an all-day chip; a shorter long one
   const withGym = await render(model([gym, long]), { geometry, layout: 'timeline', theme: 'none', breakHours: 0, ambientHours: 24 });
   const without = await render(model([gym, long]), { geometry, layout: 'timeline', theme: 'none', breakHours: 0, ambientHours: 0 });
   assert.notDeepEqual(withGym, without);
+});
+
+test('the timeline always shows the normal day, widened only by events outside it', () => {
+  const at5pm = [{ s: 17 * 60, e: 18 * 60 }];
+  assert.deepEqual(visibleHours(at5pm, 7, 21), { startH: 7, endH: 21 }, 'one evening event: still 7 AM to 9 PM');
+  assert.deepEqual(visibleHours([{ s: 5 * 60, e: 6 * 60 }], 7, 21), { startH: 4, endH: 21 }, 'an early event adds an hour before it');
+  assert.deepEqual(visibleHours([{ s: 22 * 60, e: 23 * 60 + 30 }], 7, 21), { startH: 7, endH: 24 }, 'a late one extends to midnight');
+  assert.deepEqual(visibleHours(at5pm, 0, 0), { startH: 15, endH: 21 }, 'with no normal day it is the old behavior: around the events, at least six hours');
+});
+
+test('empty hours fold only between events, never at the start or end of the normal day', () => {
+  const hrs = (rows) => rows.map((r) => (r.hr !== undefined ? r.hr : `${r.from}-${r.to}`));
+  const one = [{ s: 17 * 60, e: 18 * 60 }];
+  assert.equal(hourRows(one, 7, 21, 3).every((r) => r.hr !== undefined), true, 'a single event: every hour is drawn, none folded');
+  const two = [{ s: 8 * 60, e: 9 * 60 }, { s: 18 * 60, e: 19 * 60 }];
+  assert.deepEqual(hrs(hourRows(two, 7, 21, 3)), [7, 8, '9-18', 18, 19, 20], 'the gap between two events folds, the edges stay');
+  assert.deepEqual(hrs(hourRows(two, 7, 21, 0)).length, 14, 'folding off: every hour');
+  assert.deepEqual(hrs(hourRows([{ s: 8 * 60, e: 9 * 60 }, { s: 11 * 60, e: 12 * 60 }], 7, 21, 3)).slice(0, 5), [7, 8, 9, 10, 11], 'a two-hour gap is below the threshold');
 });

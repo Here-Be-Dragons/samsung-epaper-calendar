@@ -49,6 +49,11 @@ calendars:
 #     - { from: easter-7, to: easter+1, theme: easter }   # MM-DD, or easter / thanksgiving with an offset in days
 #     - { from: 10-24, to: 10-31, theme: halloween }
 #   builtin_windows: true        # false: only your windows
+#   takeovers:                   # holiday posters: a full-screen picture and only today's agenda, on the day(s) given
+#     - { from: 12-24, to: 12-26, scene: christmas }                    # a built-in scene (valentine, shamrock, easter, patriotic,
+#     - { from: 06-14, scene: birthday, greeting: [HAPPY, BIRTHDAY] }   # halloween, thanksgiving, christmas, newyear) or your own:
+#                                                                       # draw themes/birthday/poster.png (1440 x 2560 px)
+#   builtin_takeovers: true      # false: only your takeovers (TAKEOVERS=off in .env: none at all)
 #   marks:                       # a decorated day cell on a date, every year, in any theme
 #     "05-14": { motif: star, tint: "#fff3c4", deco: ["#f5b700"] }
 #   custom:                      # your own themes

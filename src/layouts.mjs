@@ -6,12 +6,14 @@
  *   paper     month grid like a printed wall calendar, then today's agenda and the shopping list
  *   timeline  a compact month, then today as an hour-by-hour timeline beside coming up and shopping
  */
-import { BLACK, WHITE } from './inks.mjs';
+import { createCanvas } from '@napi-rs/canvas';
+import { BLACK, WHITE, YELLOW } from './inks.mjs';
 import { px } from './scale.mjs';
 import { dayAgenda, buildMonth } from './calendar.mjs';
+import { drawPosterScene, POSTER_SCENES, POSTER_GREETINGS } from './scenes.mjs';
 import { longDay, minuteOfDay, shortDay } from './dates.mjs';
 import {
-  INK, ON, F, MARGIN, WEEKDAY_H, headerH, footerH, outlined, fit, drawText, wrap, roundedRect,
+  INK, ON, F, MARGIN, WEEKDAY_H, headerH, footerH, fit, drawText, wrap, roundedRect,
   drawHeader, drawMonth, drawAgenda, drawComingUp, drawShopping, panelHeader, timeLabel,
 } from './draw.mjs';
 
@@ -35,6 +37,43 @@ function paperLayout(ctx, model, { w, h, S }) {
   } else {
     drawAgenda(ctx, model, x, bottomTop, cw, bottomH, S);
   }
+}
+
+// --- poster: a holiday scene with only today's agenda ---------------------------------------------------
+
+/** A full-bleed holiday scene across the frame, a big greeting on it, and today's agenda on a plaque at the bottom. */
+function posterLayout(ctx, model, { w, h, S }) {
+  const take = S.takeover; // set on a holiday takeover; a plain layout=poster preview falls back to the theme's scene
+  const scene = take?.scene ?? (POSTER_SCENES[S.theme?.name] ? S.theme.name : S.theme?.name === 'autumn' ? 'thanksgiving' : 'halloween');
+  const k = w / 1440, margin = Math.round(30 * k), pad = Math.round(24 * k);
+  // The plaque is as tall as the agenda needs (measured by drawing it once off to the side), within limits; the scene gets the rest.
+  const dry = createCanvas(8, 8).getContext('2d');
+  dry.textBaseline = 'alphabetic';
+  const used = drawAgenda(dry, model, 0, 0, w - 2 * margin - 2 * pad, h, { ...S, art: dry }, { comingUp: false });
+  const ph = Math.min(Math.round(h * 0.42), Math.max(Math.round(300 * k), Math.round(used + 2 * pad + 56 * k))); // + room for the entry that just fits
+  const plaqueTop = h - margin - ph;
+  if (take?.picture) { // your own picture: covers the frame; no lettering unless the takeover asks for a greeting
+    const im = take.picture, cover = Math.max(w / im.width, h / im.height);
+    S.art.drawImage(im, (w - im.width * cover) / 2, (h - im.height * cover) / 2, im.width * cover, im.height * cover);
+  } else drawPosterScene(S.art, scene, w, h, plaqueTop);
+  const label = (text, cy, size, fill, stroke) => { // big lettering, outlined so it reads on the art; shrunk to fit the width
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.textBaseline = 'alphabetic';
+    let fitted = size;
+    for (; fitted > 24; fitted -= 2) { ctx.font = F.bold((fitted * k * 800) / w); if (ctx.measureText(text).width <= w - 2 * margin - stroke * k) break; }
+    const x = (w - ctx.measureText(text).width) / 2, y = cy * k;
+    ctx.strokeStyle = BLACK; ctx.lineWidth = stroke * k * (fitted / size); ctx.strokeText(text, x, y);
+    ctx.fillStyle = fill; ctx.fillText(text, x, y);
+  };
+  const base = POSTER_GREETINGS[scene] ?? { lines: [], fill: '#ffff00' };
+  const lines = take?.greeting ?? (take?.picture ? [] : base.lines); // your picture is left bare unless the takeover gives a greeting
+  if (lines.length === 2) { label(lines[0], 190, 130, base.fill, 26); label(lines[1], 335, 156, base.fill, 30); }
+  else if (lines.length === 1) label(lines[0], 300, 156, base.fill, 30);
+  if (lines.length) label(longDay(model.today), 440, 62, WHITE, 16);
+  // the plaque, and the agenda in it. The white is on the decoration layer, under the agenda's colored title band (also drawn there).
+  const px0 = margin, pw = w - 2 * margin;
+  S.art.fillStyle = WHITE; roundedRect(S.art, px0, plaqueTop, pw, ph, 30 * k); S.art.fill();
+  ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(4, 10 * k); roundedRect(ctx, px0, plaqueTop, pw, ph, 30 * k); ctx.stroke();
+  drawAgenda(ctx, model, px0 + pad, plaqueTop + pad, pw - 2 * pad, ph - 2 * pad, S, { comingUp: false });
 }
 
 // --- timeline: a compact month on top ------------------------------------------------------------------
@@ -95,6 +134,39 @@ export function cascade(items, { left0, right, indent, minW }) {
   });
 }
 
+/**
+ * The hours the timeline shows: your usual day (`dayStart` to `dayEnd`, hours of the day) at least, widened to an hour before the
+ * first event and an hour after the last when they fall outside it, and never fewer than six. `span` is [{ s, e }] in minutes.
+ */
+export function visibleHours(span, dayStart = 0, dayEnd = 0) {
+  const around = { from: Math.max(0, Math.floor(Math.min(...span.map((t) => t.s)) / 60) - 1), to: Math.min(24, Math.ceil(Math.max(...span.map((t) => t.e)) / 60) + 1) };
+  const normal = dayEnd > dayStart; // no normal day set: just around the events
+  let startH = normal ? Math.min(dayStart, around.from) : around.from;
+  let endH = normal ? Math.max(dayEnd, around.to) : around.to;
+  while (endH - startH < 6) { if (endH < 24) endH++; if (endH - startH < 6 && startH > 0) startH--; }
+  return { startH, endH };
+}
+
+/** Whether any event overlaps the hour `hr` (an event counts as at least 30 minutes long). */
+export const hourBusy = (span, hr) => span.some((t) => t.s < (hr + 1) * 60 && Math.max(t.e, t.s + 30) > hr * 60);
+
+/**
+ * The rows of the timeline from `startH` to `endH`: one `{ hr }` per hour, except that with `breakHours` set, a run of that many
+ * empty hours or more between two busy ones becomes one `{ from, to }` break. Empty hours before the first event and after the
+ * last are never folded: they are the day's normal hours, shown as they are.
+ */
+export function hourRows(span, startH, endH, breakHours) {
+  const busyHours = [];
+  for (let hr = startH; hr < endH; hr++) if (hourBusy(span, hr)) busyHours.push(hr);
+  const first = busyHours[0], last = busyHours.at(-1), rows = [];
+  for (let hr = startH; hr < endH;) {
+    let run = hr;
+    if (breakHours > 0 && hr > first) while (run < endH && !hourBusy(span, run)) run++;
+    if (breakHours > 0 && run - hr >= breakHours && run <= last) { rows.push({ from: hr, to: run }); hr = run; } else { rows.push({ hr }); hr++; }
+  }
+  return rows;
+}
+
 /** Minutes of the day an event covers on `key`: from 0 if it began earlier, to 1440 if it carries on (or ends exactly at midnight). */
 export function dayMinutes(ev, key) {
   const s = ev.startDay < key ? 0 : minuteOfDay(ev.start);
@@ -129,7 +201,6 @@ function drawTimeline(ctx, model, x, y, w, h, S) {
   chips.slice(0, maxChips).forEach(({ ev, extra }) => {
     const ink = ev.cal.color;
     ctx.fillStyle = INK[ink]; roundedRect(ctx, x, cy + px(4), w, chipH, px(5)); ctx.fill();
-    if (outlined(ink)) { ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); roundedRect(ctx, x, cy + px(4), w, chipH, px(5)); ctx.stroke(); }
     ctx.fillStyle = ON[ink]; ctx.font = F.bold(14);
     const span = extra || (ev.endDay > ev.startDay ? `  (${shortDay(ev.startDay).replace(/^\w+, /, '')} – ${shortDay(ev.endDay).replace(/^\w+, /, '')})` : '');
     drawText(ctx, fit(ctx, ev.title + span, F.bold(14), w - px(14)), x + px(7), cy + px(4) + px(16));
@@ -145,22 +216,11 @@ function drawTimeline(ctx, model, x, y, w, h, S) {
     return;
   }
 
-  // The visible hours: from an hour before the first event to an hour after the last, at least six.
   const span = normal.map((ev) => ({ ev, ...dayMinutes(ev, key) })).sort((a, b) => a.s - b.s || b.e - a.e);
-  let startH = Math.max(0, Math.floor(Math.min(...span.map((t) => t.s)) / 60) - 1);
-  let endH = Math.min(24, Math.ceil(Math.max(...span.map((t) => t.e)) / 60) + 1);
-  while (endH - startH < 6) { if (endH < 24) endH++; if (endH - startH < 6 && startH > 0) startH--; }
+  const { startH, endH } = visibleHours(span, S.dayStart ?? 0, S.dayEnd ?? 0);
   const areaTop = cy, areaH = bottom - cy - px(6);
   const axisW = px(46), bx0 = x + axisW, bw = w - axisW - px(2);
-
-  // The hour rows. A run of S.breakHours or more empty hours is folded into one thin break row.
-  const busy = (hr) => span.some((t) => t.s < (hr + 1) * 60 && Math.max(t.e, t.s + 30) > hr * 60);
-  const rows = []; // { hr } or { from, to } for a break
-  for (let hr = startH; hr < endH;) {
-    let run = hr;
-    while (S.breakHours > 0 && run < endH && !busy(run)) run++;
-    if (S.breakHours > 0 && run - hr >= S.breakHours) { rows.push({ from: hr, to: run }); hr = run; } else { rows.push({ hr }); hr++; }
-  }
+  const rows = hourRows(span, startH, endH, S.breakHours ?? 0); // { hr } or { from, to } for a folded break
   const breakH = px(26), nHours = rows.filter((r) => r.hr !== undefined).length, nBreaks = rows.length - nHours;
   const hourH = Math.min(px(90), (areaH - nBreaks * breakH) / nHours);
   let ry = areaTop;
@@ -229,7 +289,6 @@ function drawTimeline(ctx, model, x, y, w, h, S) {
       const r = px(5); // rounded corners, and the white border around an overlapping block follows them
       if (!solo) { ctx.fillStyle = WHITE; roundedRect(ctx, it.left - px(2), it.top - px(2), wide + px(4), it.bh + px(4), r + px(2)); ctx.fill(); }
       ctx.fillStyle = INK[ink]; roundedRect(ctx, it.left, it.top, wide, it.bh, r); ctx.fill();
-      if (outlined(ink)) { ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); roundedRect(ctx, it.left, it.top, wide, it.bh, r); ctx.stroke(); }
       ctx.fillStyle = ON[ink];
       let ty = it.top + px(15);
       if (it.tall) { ctx.font = F.regular(11); drawText(ctx, fit(ctx, timeLabel(ev, key).join(' ').replace('– ', '– '), F.regular(11), it.limit), it.left + px(6), ty - px(1)); ty += px(15); }
@@ -254,7 +313,6 @@ function drawDayList(ctx, span, key, x, top, w, bottom) {
   span.slice(0, shown).forEach(({ ev }, i) => {
     const ry = top + i * rowH, ink = ev.cal.color;
     ctx.fillStyle = INK[ink]; ctx.fillRect(x, ry + px(2), px(5), rowH - px(4));
-    if (outlined(ink)) { ctx.strokeStyle = BLACK; ctx.lineWidth = Math.max(1, px(1)); ctx.strokeRect(x, ry + px(2), px(5), rowH - px(4)); }
     const base = ry + rowH / 2 + px(5);
     ctx.fillStyle = BLACK; ctx.font = F.bold(14);
     const [t1] = timeLabel(ev, key);
@@ -281,6 +339,8 @@ function timelineLayout(ctx, model, { w, h, S }) {
   }
 }
 
-export const LAYOUTS = { paper: paperLayout, timeline: timelineLayout };
+export const LAYOUTS = { paper: paperLayout, timeline: timelineLayout, poster: posterLayout };
 export const LAYOUT_NAMES = Object.keys(LAYOUTS);
+/** Layouts that fill the frame themselves, with no themed footer legend over them. */
+export const FULL_BLEED = new Set(['poster']);
 export const DEFAULT_LAYOUT = 'paper';

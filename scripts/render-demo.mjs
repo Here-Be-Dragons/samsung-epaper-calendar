@@ -33,7 +33,7 @@ const at = (iso) => getModel({ now: new Date(iso) });
 const save = async (name, buffer) => { fs.writeFileSync(path.join(out, name), buffer); console.log(`wrote ${path.relative(root, path.join(out, name))} (${(buffer.length / 1024).toFixed(0)} KB)`); };
 
 // Easter Sunday, the paper layout: the theme marks the holiday cell.
-await save('paper-easter.png', await render(await at('2026-04-05T16:00:00Z'), { geometry, layout: 'paper', theme: 'auto', art }));
+await save('paper-easter.png', await render(await at('2026-04-05T16:00:00Z'), { geometry, layout: 'paper', theme: 'auto', art, takeover: false }));
 // A busy Thursday, the timeline layout (overlapping meetings share the width).
 await save('timeline.png', await render(await at('2026-04-09T16:00:00Z'), { geometry, layout: 'timeline', theme: 'auto', art }));
 // The same day with theming off.
@@ -44,7 +44,7 @@ await save('paper-plain.png', await render(await at('2026-04-09T16:00:00Z'), { g
 async function tileSheet(name, dates) {
   const tiles = [];
   for (const date of dates) {
-    const png = await render(await at(`${date}T16:00:00Z`), { geometry, layout: 'paper', theme: 'auto', art });
+    const png = await render(await at(`${date}T16:00:00Z`), { geometry, layout: 'paper', theme: 'auto', art, takeover: false }); // the calendar on the holiday, not its poster
     tiles.push(await sharp(png).extract({ left: 0, top: 0, width: 1440, height: 640 }).resize(700).png().toBuffer());
   }
   const th = (await sharp(tiles[0]).metadata()).height, rows = Math.ceil(tiles.length / 2);
@@ -53,3 +53,13 @@ async function tileSheet(name, dates) {
 }
 await tileSheet('themes.png', ['2026-01-15', '2026-02-20', '2026-03-03', '2026-04-15', '2026-05-15', '2026-06-15', '2026-07-15', '2026-08-15', '2026-09-15', '2026-10-15', '2026-11-03', '2026-12-03']);
 await tileSheet('holidays.png', ['2026-02-14', '2026-03-17', '2026-04-05', '2026-07-04', '2026-10-31', '2026-11-26', '2026-12-25', '2026-12-31']);
+
+// The eight holiday posters, one contact sheet: on the day itself the poster replaces the calendar.
+{
+  const days = ['2026-02-14', '2026-03-17', '2026-04-05', '2026-07-04', '2026-10-31', '2026-11-26', '2026-12-25', '2026-12-31'];
+  const tiles = [];
+  for (const date of days) tiles.push(await sharp(await render(await at(`${date}T16:00:00Z`), { geometry, layout: 'paper', theme: 'auto', art })).resize(340).png().toBuffer());
+  const th = (await sharp(tiles[0]).metadata()).height;
+  await save('posters.png', await sharp({ create: { width: 4 * 350 - 10, height: 2 * (th + 10) - 10, channels: 3, background: '#ffffff' } })
+    .composite(tiles.map((input, i) => ({ input, left: (i % 4) * 350, top: Math.floor(i / 4) * (th + 10) }))).png({ palette: false, compressionLevel: 9 }).toBuffer());
+}
