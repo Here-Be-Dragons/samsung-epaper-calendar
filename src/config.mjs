@@ -154,6 +154,11 @@ export const MQTT_PASSWORD = process.env.MQTT_PASSWORD || '';
 export const MQTT_DISCOVERY_PREFIX = (process.env.MQTT_DISCOVERY_PREFIX || 'homeassistant').replace(/\/+$/, '');
 export const MQTT_TOPIC_PREFIX = (process.env.MQTT_TOPIC_PREFIX || 'samsung-epaper-calendar').replace(/\/+$/, '');
 
+// --- Private events ---------------------------------------------------------------
+// PRIVATE_EVENTS: hide (default) | busy (shown as "Busy", no details) | show. Events marked Private in your calendar (CLASS:PRIVATE).
+export const PRIVATE_EVENTS = (process.env.PRIVATE_EVENTS || 'hide').toLowerCase();
+if (!['hide', 'busy', 'show'].includes(PRIVATE_EVENTS)) throw new Error(`PRIVATE_EVENTS must be hide, busy or show (got "${PRIVATE_EVENTS}")`);
+
 // --- Shopping list ----------------------------------------------------------------
 // SHOPPING_SOURCE: none (default) | file | googletasks   (see src/shopping.mjs and docs/CONFIGURATION.md)
 export const SHOPPING_SOURCE = (process.env.SHOPPING_SOURCE || 'none').toLowerCase();

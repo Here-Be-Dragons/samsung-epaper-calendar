@@ -113,7 +113,7 @@ function makeEvent(cal, e, { start, end, allDay, recurring, recurrenceKey }) {
     description: cleanDescription(e.description),
     url: text(e.url),
     status: text(e.status).toUpperCase(),
-    private: text(e.class).toUpperCase() === 'PRIVATE',
+    private: ['PRIVATE', 'CONFIDENTIAL'].includes(text(e.class).toUpperCase()),
     free: text(e.transparency).toUpperCase() === 'TRANSPARENT',
     categories: [].concat(e.categories ?? []).map(text).filter(Boolean),
     organizerName: attendeeNames.length || !organizer ? organizer : '',
@@ -227,6 +227,17 @@ async function loadFeed(cal) {
   }
 }
 
+/**
+ * Applies PRIVATE_EVENTS to events marked Private (iCal CLASS:PRIVATE or CONFIDENTIAL): `hide` drops them, `busy` keeps the time
+ * under the title "Busy" with nothing else, `show` leaves them alone. The feed itself carries their details, so this is the only
+ * place that keeps them off the display.
+ */
+export function applyPrivacy(events, mode = config.PRIVATE_EVENTS) {
+  if (mode === 'show') return events;
+  if (mode === 'hide') return events.filter((e) => !e.private);
+  return events.map((e) => (e.private ? { ...e, title: 'Busy', location: '', description: '', url: '', categories: [], organizerName: '', attendeeNames: [], conference: null } : e));
+}
+
 /** Everything one frame needs. `now` can be set to preview another day. */
 export async function getModel({ now = new Date(), calendars = config.CALENDARS } = {}) {
   const today = dayKey(now);
@@ -240,7 +251,7 @@ export async function getModel({ now = new Date(), calendars = config.CALENDARS 
   for (const { cal, feed } of loaded) {
     const named = { ...cal, name: cal.name || feed.name || cal.id };
     info.push({ id: cal.id, name: named.name, color: cal.color, ok: feed.ok, markDays: cal.markDays });
-    events.push(...eventsFrom(named, feed.parsed, from, to));
+    events.push(...applyPrivacy(eventsFrom(named, feed.parsed, from, to)));
   }
   return { now, today, from, to, events, calendars: info, shopping: await getShopping() };
 }

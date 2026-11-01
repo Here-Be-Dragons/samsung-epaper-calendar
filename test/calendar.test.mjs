@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import ical from 'node-ical';
-import { eventsFrom, wallToInstant, instantToWall, cleanDescription, buildMonth, dayAgenda } from '../src/calendar.mjs';
+import { eventsFrom, applyPrivacy, wallToInstant, instantToWall, cleanDescription, buildMonth, dayAgenda } from '../src/calendar.mjs';
 import { monthWeeks, addDays, dayKey } from '../src/dates.mjs';
 
 const cal = { id: 't', name: 'Test', color: 'blue' };
@@ -95,4 +95,18 @@ test('guest lists leave out the calendar owner, shorten emails, and drop Google 
   assert.deepEqual(ev.attendeeNames, ['sam']);
   assert.equal(ev.organizerName, '');
   assert.equal(ev.description, '');
+});
+
+test('events marked Private are read from CLASS, and PRIVATE_EVENTS hides them, shows them as Busy, or leaves them', () => {
+  const ev = (uid, cls) => `BEGIN:VEVENT\r\nUID:${uid}\r\nDTSTART;TZID=America/New_York:20261104T090000\r\nDTEND;TZID=America/New_York:20261104T100000\r\nSUMMARY:Title ${uid}\r\nLOCATION:Somewhere\r\nDESCRIPTION:Secret notes\r\n${cls ? `CLASS:${cls}\r\n` : ''}END:VEVENT`;
+  const p = parse(['pub:PUBLIC', 'priv:PRIVATE', 'conf:CONFIDENTIAL', 'plain:'].map((x) => ev(...x.split(':'))).join('\r\n'));
+  const events = eventsFrom(cal, p, '2026-11-01', '2026-11-30');
+  assert.deepEqual(events.map((e) => [e.title, e.private]).sort(), [['Title conf', true], ['Title plain', false], ['Title priv', true], ['Title pub', false]]);
+  assert.deepEqual(applyPrivacy(events, 'hide').map((e) => e.title).sort(), ['Title plain', 'Title pub']);
+  assert.equal(applyPrivacy(events, 'show').length, 4);
+  const busy = applyPrivacy(events, 'busy');
+  assert.equal(busy.length, 4);
+  const hidden = busy.filter((e) => e.private);
+  assert.ok(hidden.every((e) => e.title === 'Busy' && !e.location && !e.description), 'nothing but the time survives');
+  assert.ok(busy.filter((e) => !e.private).every((e) => e.location === 'Somewhere'));
 });

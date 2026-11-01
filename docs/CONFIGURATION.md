@@ -231,6 +231,12 @@ kept if Google is unreachable; that calendar's legend entry then says "(offline)
 the panel after the next fetch plus the next refresh, so allow up to about 25 minutes by default;
 `curl -X POST localhost:8080/refresh` does it now.
 
+### Private events
+
+An event marked **Private** in Google Calendar (iCal `CLASS:PRIVATE`; `CONFIDENTIAL` counts too) is **not shown** by default. Your
+secret iCal link carries the full details of private events, so the server is what keeps them off the wall. `PRIVATE_EVENTS=busy`
+keeps them as a block titled "Busy" with no location, guests or notes; `PRIVATE_EVENTS=show` shows them like any other.
+
 ## Repeating events and time zones
 
 Repeating events are expanded by wall-clock time, so a 9:00 AM meeting stays at 9:00 AM when
