@@ -313,9 +313,14 @@ export function drawMonth(ctx, model, x, y, w, h, S, { compact = false } = {}) {
   const colW = w / 7;
   const wdH = px(WEEKDAY_H);
   const rowH = (h - wdH) / weeks.length;
-  const NUM_H = px(compact ? 22 : 28), LINE_H = px(compact ? 20 : 21), BAR_H = px(compact ? 18 : 19);
+  const NUM_H = px(compact ? 22 : 28), BAR_H = px(compact ? 18 : 19);
   const dotsH = compact ? px(15) : 0;
+  // A compact month keeps a row at the bottom of each cell for the dots and the "+N" (dotsH). A day with nothing to put there may use
+  // it for one more bar (`capacityMax`), and the rows are squeezed by a pixel when that is what gains the bar.
+  const squeeze = compact && Math.floor((rowH - NUM_H - px(2)) / (px(20) - px(1))) > Math.floor((rowH - NUM_H - px(2)) / px(20)) ? px(1) : 0;
+  const LINE_H = px(compact ? 20 : 21) - squeeze;
   const capacity = Math.max(1, Math.floor((rowH - NUM_H - dotsH - px(2)) / LINE_H));
+  const capacityMax = compact ? Math.max(capacity, Math.floor((rowH - NUM_H - px(2)) / LINE_H)) : capacity;
   const marked = markedDays(model);
   const stamps = stampsFor(S.theme, weeks.flatMap((wk) => wk.days), S.plan);
   const line = Math.max(1, px(1.5));
@@ -370,7 +375,10 @@ export function drawMonth(ctx, model, x, y, w, h, S, { compact = false } = {}) {
     // either (it is counted in the "+N more" instead). Compact months show the count elsewhere and need no row.
     const entriesOn = (ci) => week.bars.filter((b) => ci >= b.startCol && ci <= b.endCol).length + (week.singles.get(week.days[ci])?.length ?? 0);
     const overflowing = week.days.map((_, ci) => !compact && entriesOn(ci) > capacity);
-    const drawn = (bar) => bar.lane < capacity - (overflowing.slice(bar.startCol, bar.endCol + 1).some(Boolean) ? 1 : 0);
+    // A day with no timed events and no bar past the last row needs no dots row, so its last row can hold a bar after all.
+    const roomy = (ci) => !week.singles.get(week.days[ci])?.length && week.bars.every((b) => ci < b.startCol || ci > b.endCol || b.lane < capacityMax);
+    const drawn = (bar) => bar.lane < capacity - (overflowing.slice(bar.startCol, bar.endCol + 1).some(Boolean) ? 1 : 0)
+      || (bar.lane < capacityMax && week.days.slice(bar.startCol, bar.endCol + 1).every((_, i) => roomy(bar.startCol + i)));
     for (const bar of week.bars) {
       if (!drawn(bar)) continue;
       const gap = px(2);
@@ -538,13 +546,16 @@ export function drawComingUp(ctx, model, x, y, w, bottom, S, { span = 14, title 
     cy += px(26);
     for (const ev of day.events) {
       if (cy + px(22) > bottom) return;
-      // A multi-day event reads "Day 2/4" on its later days; its dates are in the heading of its first.
-      const t1 = ev.allDay && ev.endDay > ev.startDay ? `Day ${diffDays(ev.startDay, day.key) + 1}/${diffDays(ev.startDay, ev.endDay) + 1}` : timeLabel(ev, day.key)[0];
+      // A multi-day event reads "Day 2/4" on its later days (its dates are in the heading of its first), and "until 4:30 PM" on the last of a timed one.
+      const dayN = `Day ${diffDays(ev.startDay, day.key) + 1}/${diffDays(ev.startDay, ev.endDay) + 1}`;
+      const t1 = ev.allDay && ev.endDay > ev.startDay ? dayN
+        : !ev.allDay && ev.startDay < day.key ? (ev.endDay > day.key ? dayN : `until ${clock(ev.end)}`)
+        : timeLabel(ev, day.key)[0];
       ctx.fillStyle = INK[ev.cal.color]; ctx.fillRect(x + px(10), cy + px(5), px(9), px(9));
       chipEdge(ctx, x + px(10), cy + px(5), px(9), px(9));
       ctx.fillStyle = BLACK; ctx.font = F.regular(14);
-      ctx.fillText(t1, x + px(26), cy + px(15));
-      drawText(ctx, fit(ctx, ev.title, F.regular(14), w - px(26) - px(86) - px(8)), x + px(26) + px(88), cy + px(15));
+      drawText(ctx, fit(ctx, t1, F.regular(14), px(98)), x + px(26), cy + px(15));
+      drawText(ctx, fit(ctx, ev.title, F.regular(14), w - px(26) - px(100) - px(8)), x + px(26) + px(102), cy + px(15));
       cy += px(22);
     }
     cy += px(4);

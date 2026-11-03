@@ -180,7 +180,8 @@ export function dayMinutes(ev, key) {
  * Today, hour by hour. Three things keep a crowded or odd day readable (all off unless S.ambientHours / S.breakHours are set):
  *  - an event as long as S.ambientHours (a 24/7 gym: a whole day) is treated as an all-day event: a chip above the hours, taking no
  *    part in laying out the day, so it neither stretches the hours nor takes width;
- *  - a run of S.breakHours or more empty hours is folded into one thin break row, so the busy part keeps its height;
+ *  - a run of S.breakHours or more empty hours is folded into one thin break row, so the busy part keeps its height (only when
+ *    the hours would otherwise be squeezed under 30 units tall; a day with room is drawn hour by hour);
  *  - if the hours still cannot be drawn legibly (a block an hour long would be tiny, or more than six events overlapping at once),
  *    the day is listed in time order instead.
  */
@@ -220,7 +221,9 @@ function drawTimeline(ctx, model, x, y, w, h, S) {
   const { startH, endH } = visibleHours(span, S.dayStart ?? 0, S.dayEnd ?? 0);
   const areaTop = cy, areaH = bottom - cy - px(6);
   const axisW = px(46), bx0 = x + axisW, bw = w - axisW - px(2);
-  const rows = hourRows(span, startH, endH, S.breakHours ?? 0); // { hr } or { from, to } for a folded break
+  // Folding is only for a day that would not fit: with room to give every hour its height, a quiet midday stays as it is.
+  const roomy = areaH / (endH - startH) >= px(30);
+  const rows = hourRows(span, startH, endH, roomy ? 0 : S.breakHours ?? 0); // { hr } or { from, to } for a folded break
   const breakH = px(26), nHours = rows.filter((r) => r.hr !== undefined).length, nBreaks = rows.length - nHours;
   const hourH = Math.min(px(90), (areaH - nBreaks * breakH) / nHours);
   let ry = areaTop;
