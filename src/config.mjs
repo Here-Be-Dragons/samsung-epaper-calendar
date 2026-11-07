@@ -86,6 +86,9 @@ export const TIMELINE_BREAK_HOURS = Math.max(0, int('TIMELINE_BREAK_HOURS', 3));
 // one event is not squeezed into a few hours.
 export const TIMELINE_DAY_START = Math.min(23, Math.max(0, int('TIMELINE_DAY_START', 7)));
 export const TIMELINE_DAY_END = Math.min(24, Math.max(TIMELINE_DAY_START + 1, int('TIMELINE_DAY_END', 21)));
+// Timeline layout: how many weeks the calendar at the top shows, from the one holding today (default 2: this week and next; 0: the
+// whole month). Fewer weeks mean taller cells, with the start time before each title, and more room for the day below.
+export const TIMELINE_WEEKS = Math.min(3, Math.max(0, int('TIMELINE_WEEKS', 2)));
 export const JPEG_QUALITY = int('JPEG_QUALITY', 100);
 
 // --- HTTP server -------------------------------------------------------------

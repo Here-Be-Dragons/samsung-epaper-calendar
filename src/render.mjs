@@ -31,7 +31,7 @@ const quantizerFor = (art, text, alphaCut) => {
  * of `model.today` (auto, none, or a theme name; `plan` holds the months, holiday windows and custom themes). Frames
  * render one at a time because px() reads the current geometry.
  */
-export function render(model, { geometry, layout: asked = DEFAULT_LAYOUT, theme = config.THEME, plan = config.THEME_PLAN, art: artMode = config.ART_DITHER, font = config.FONT, text: textMode = config.TEXT_AA, textCut = config.TEXT_CUT, breakHours = config.TIMELINE_BREAK_HOURS, ambientHours = config.TIMELINE_AMBIENT_HOURS, dayStart = config.TIMELINE_DAY_START, dayEnd = config.TIMELINE_DAY_END, takeover = config.TAKEOVERS }) {
+export function render(model, { geometry, layout: asked = DEFAULT_LAYOUT, theme = config.THEME, plan = config.THEME_PLAN, art: artMode = config.ART_DITHER, font = config.FONT, text: textMode = config.TEXT_AA, textCut = config.TEXT_CUT, breakHours = config.TIMELINE_BREAK_HOURS, ambientHours = config.TIMELINE_AMBIENT_HOURS, dayStart = config.TIMELINE_DAY_START, dayEnd = config.TIMELINE_DAY_END, weeks = config.TIMELINE_WEEKS, takeover = config.TAKEOVERS }) {
   if (!LAYOUTS[asked]) throw new Error(`Unknown layout "${asked}"`);
   if (!config.TEXT_MODES.includes(textMode)) throw new Error(`Unknown text mode "${textMode}". Available: ${config.TEXT_MODES.join(', ')}`);
   if (!config.ART_MODES.includes(artMode)) throw new Error(`Unknown art mode "${artMode}". Available: ${config.ART_MODES.join(', ')}`);
@@ -60,6 +60,7 @@ export function render(model, { geometry, layout: asked = DEFAULT_LAYOUT, theme 
     S.breakHours = breakHours;
     S.ambientHours = ambientHours;
     S.dayStart = dayStart; S.dayEnd = dayEnd;
+    S.weeks = weeks;
     S.images = S.theme ? await loadThemeArt(S.theme.name, { month: MONTH_KEYS[Number(model.today.slice(5, 7)) - 1] }) : null; // your own PNGs for this theme, if any
     useMotifImages(S.images?.motifs);
     draw(ctx, model, { w, h, S });

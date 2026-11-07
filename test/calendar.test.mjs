@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import ical from 'node-ical';
 import { eventsFrom, applyPrivacy, wallToInstant, instantToWall, cleanDescription, buildMonth, dayAgenda } from '../src/calendar.mjs';
-import { monthWeeks, addDays, dayKey } from '../src/dates.mjs';
+import { monthWeeks, weeksFrom, addDays, dayKey } from '../src/dates.mjs';
 
 const cal = { id: 't', name: 'Test', color: 'blue' };
 const wrap = (body) => `BEGIN:VCALENDAR\r\nVERSION:2.0\r\n${body}\r\nEND:VCALENDAR\r\n`;
@@ -109,4 +109,17 @@ test('events marked Private are read from CLASS, and PRIVATE_EVENTS hides them, 
   const hidden = busy.filter((e) => e.private);
   assert.ok(hidden.every((e) => e.title === 'Busy' && !e.location && !e.description), 'nothing but the time survives');
   assert.ok(busy.filter((e) => !e.private).every((e) => e.location === 'Somewhere'));
+});
+
+test('a few weeks from today: the week holding today, then the next, even across the end of the month', () => {
+  assert.deepEqual(weeksFrom('2026-11-07', 2).map((w) => [w[0], w[6]]), [['2026-11-01', '2026-11-07'], ['2026-11-08', '2026-11-14']]);
+  const cal = { name: 'Home', color: 'blue' };
+  const timed = (id, day) => ({ id, cal, title: id, start: new Date(`${day}T15:00:00Z`), end: new Date(`${day}T16:00:00Z`), allDay: false, startDay: day, endDay: day, multiDay: false });
+  const model = { today: '2026-11-30', events: [timed('now', '2026-11-30'), timed('next', '2026-12-08'), timed('later', '2026-12-15')] };
+  const { weeks } = buildMonth(model, { weeks: 2 });
+  assert.equal(weeks.length, 2);
+  assert.equal(weeks[0].days[0], '2026-11-29', 'the week of the 30th starts on Sunday the 29th');
+  assert.equal(weeks[1].days[6], '2026-12-12', 'and the next one runs into December, which the month grid would not show');
+  assert.deepEqual([...weeks[1].singles.keys()], ['2026-12-08']);
+  assert.equal(buildMonth(model).weeks.length, 5, 'no weeks given: the whole month (November 2026 is five weeks)');
 });

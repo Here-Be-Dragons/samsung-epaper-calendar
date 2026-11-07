@@ -404,8 +404,8 @@ export function drawScene(ctx, theme, x, y, w, h, seed = 1) {
   ground(ctx, theme, x, y, w, h);
 }
 
-/** Tint, speckle and a corner motif for a holiday's day cell (the cell stays white where it is read). */
-export function drawCellDecor(ctx, mark, x, y, w, h, motifSize) {
+/** Tint, speckle and a corner motif for a holiday's day cell (the cell stays white where it is read). `icon` replaces the mark's motif (none: null). */
+export function drawCellDecor(ctx, mark, x, y, w, h, motifSize, icon = mark.motif) {
   ctx.fillStyle = mark.bg; ctx.fillRect(x, y, w, h);
   const rnd = rng(seedOf(mark.motif) + Math.round(x + y));
   ctx.fillStyle = mark.deco[0];
@@ -414,7 +414,21 @@ export function drawCellDecor(ctx, mark, x, y, w, h, motifSize) {
     const px = x + rnd() * w, py = y + h * 0.3 + rnd() * h * 0.7;
     if (mark.speckle === 'stars') { starPath(ctx, px, py, 3.2, 1.4); ctx.fill(); } else { ctx.beginPath(); ctx.arc(px, py, 1.8 + rnd() * 1.8, 0, TAU); ctx.fill(); }
   }
-  drawMotif(ctx, mark.motif, x + w - motifSize * 0.62, y + motifSize * 0.58, motifSize, mark.variant ?? 0);
+  if (icon) drawMotif(ctx, icon, x + w - motifSize * 0.62, y + motifSize * 0.58, motifSize, mark.variant ?? 0);
+}
+
+/** `hex` mixed with white: `amount` of white (0 to 1). */
+const paler = (hex, amount) => '#' + [1, 3, 5].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * (1 - amount) + 255 * amount).toString(16).padStart(2, '0')).join('').toUpperCase();
+
+/**
+ * The look of today's cell in a theme: the most vivid color of the scenery's scattered pattern (the band color if the pattern has
+ * none, as with snow), mostly white, speckled with the colors of that pattern. Used with drawCellDecor.
+ */
+export function todayMark(theme) {
+  const chroma = (hex) => { const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)); return Math.max(...c) - Math.min(...c); };
+  const deco = (theme.pattern?.colors ?? []).filter((c) => luminance(c) < 215);
+  const vivid = [...deco].sort((a, b) => chroma(b) - chroma(a))[0];
+  return { motif: 'today', bg: paler(vivid && chroma(vivid) >= 60 ? vivid : theme.chrome, 0.68), deco: deco.length ? deco : [theme.chrome] };
 }
 
 // --- Dates for the marks ---------------------------------------------------------------------------------
@@ -653,9 +667,9 @@ const luminance = (hex) => { const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex
 function markFrom(m, where) {
   checkKeys(m, ['motif', 'tint', 'deco', 'speckle', 'variant'], where);
   if (!MOTIF_NAMES.includes(m.motif)) throw new Error(`${where}: motif "${m.motif}" is not one of ${MOTIF_NAMES.join(', ')}`);
-  if (!HEX.test(String(m.tint))) throw new Error(`${where}: tint must be a color like "#ffe0b0"`);
+  if (m.tint !== undefined && !HEX.test(String(m.tint))) throw new Error(`${where}: tint must be a color like "#ffe0b0"`); // accepted, but a holiday cell is no longer tinted
   if (m.speckle !== undefined && !['stars', 'dots'].includes(m.speckle)) throw new Error(`${where}: speckle must be stars or dots`);
-  return mark(m.motif, String(m.tint), m.deco === undefined ? ['#FFFFFF'] : colors(m.deco, `${where}.deco`), { ...(m.speckle ? { speckle: m.speckle } : {}), variant: Number(m.variant ?? 0) });
+  return mark(m.motif, String(m.tint ?? '#FFFFFF'), m.deco === undefined ? ['#FFFFFF'] : colors(m.deco, `${where}.deco`), { ...(m.speckle ? { speckle: m.speckle } : {}), variant: Number(m.variant ?? 0) });
 }
 /** (year) => { 'YYYY-MM-DD': mark } from a map of date specs to marks. */
 function marksFn(map, where) {

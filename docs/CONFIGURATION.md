@@ -11,7 +11,7 @@ learned about the panel itself, see [PROTOCOL.md](../PROTOCOL.md); for the diagn
 - **Month grid (Sunday first):** each event is just its title. All-day and multi-day events are
   colored bars that run across the days, carry on into the next week with ◂ ▸ arrows, and stack in
   lanes when they overlap. Timed events are the title in black beside a thin bar in the calendar's color, filling the free rows
-  of the day. Anything that does not fit becomes "+N more". Today has a yellow band across its date and a heavy black frame.
+  of the day. Anything that does not fit becomes "+N more". Today has a heavy black frame, a small **TODAY** label after its date and (with a theme) a tint made from the theme's colors: the most vivid color of its scattered pattern (its band color if the pattern has none, as with snow), mostly white, speckled with the pattern's colors. A holiday is not tinted; it has only its icon in the corner, whether or not it is today.
 - **Today's agenda:** time, title, then whichever of these the event has: **Where** (location),
   **Video** (Meet, Zoom, Teams link), **With** (organizer and guests, leaving you out), **Notes**
   (the description, with HTML, links and invite boilerplate stripped), and **Status**
@@ -27,9 +27,11 @@ Pick one with `LAYOUT` (or `DISPLAY_<ID>_LAYOUT`, or the **Layout** selector in 
 
 | Layout | What it is |
 |---|---|
-| `paper` (default) | A printed wall calendar: colored weekday band, boxed days, red Sundays and holidays, then today's agenda and the shopping list. |
+| `paper` (default) | A printed wall calendar: colored weekday band, boxed days, red holidays, then today's agenda and the shopping list. |
 | `poster` | A holiday takeover: a full-bleed illustrated scene with a big greeting and only today's agenda on a plaque at the bottom. It replaces the chosen layout on the holiday itself (see [Holiday posters](#holiday-posters)), and you can pick it as a layout to see one: `/preview?layout=poster&now=2026-10-31T12:00:00Z`. |
-| `timeline` | A compact month (shorter rows: all-day bars first, then as many timed titles as fit, then a colored dot for each one that does not), then today hour by hour (blocks sized by duration, overlaps side by side) beside Coming up and the shopping list. See below for long and crowded days. |
+| `timeline` | A compact calendar of **this week and next** (see below; `TIMELINE_WEEKS=0` for the whole month, in shorter rows), then today hour by hour (blocks sized by duration, overlaps side by side) beside Coming up and the shopping list. With a theme, the two panels hang from a scenic band, their titles white tabs on its lower edge. See below for long and crowded days. |
+
+**The weeks of the timeline.** `TIMELINE_WEEKS` (default `2`; `0` to `3`) is how many weeks the calendar at the top shows, from the one holding today. Fewer weeks mean taller cells: each is as tall as the busiest day in those weeks needs, so every title fits, a timed event starts with its time (`9a`, `2:30p`) and nothing turns into a dot unless a day is very full; what the cells do not use goes to today's hours and Coming up. No day is dimmed as another month's; a month name marks each 1st and the first cell. A preview takes `?weeks=0..3`.
 
 **A long or crowded day in the timeline.** The hour-by-hour view stays readable in four ways:
 - A timed event as long as `TIMELINE_AMBIENT_HOURS` (default 24: a whole day, such as a 24/7 gym) is shown as an all-day chip above the hours, like Google Calendar does. It does not stretch the hours or take lane width. A long event shorter than that stays a block.
@@ -40,15 +42,14 @@ Pick one with `LAYOUT` (or `DISPLAY_<ID>_LAYOUT`, or the **Layout** selector in 
 
 Set either setting to 0 to turn it off; with both at 0 the day is always drawn as hours. An event that ends exactly at midnight runs to the end of the day.
 
-Red day numbers mark Sundays, and the days of any calendar with `mark_days: true` (`CALENDAR_<ID>_MARK_DAYS=true`;
-use it for a holidays calendar).
+Red day numbers mark the days of any calendar with `mark_days: true` (`CALENDAR_<ID>_MARK_DAYS=true`;
+use it for a holidays calendar). Sundays are not red.
 
 ## Themes
 
 A theme dresses the frame around the calendar, in full color: a **scenic banner** behind the date (sky
 gradient, scattered pattern, rolling ground, big and small motifs), a **scenic footer** that holds the
-calendar legend, a **colored weekday band and panel headers** with a motif, and a **tinted, decorated
-background on real holiday dates** (a pastel Easter Sunday with a bunny, a Christmas Day tree). The date is
+calendar legend, a **colored weekday band and panel headers** with a motif, and **an icon on real holiday dates** (a bunny on Easter Sunday, a tree on Christmas Day). The date is
 centered on the banner with a white outline, and the legend sits on a white plate. **The calendar boxes stay white**, and event text, bars and gridlines stay in the
 panel's six pure inks so they read cleanly.
 
@@ -77,7 +78,7 @@ highlights) are in the pure inks. Up close it reads as a pattern, so judge the l
 | the Sunday before Thanksgiving to Thanksgiving | `autumn` |
 | Dec 12 to 26 | `christmas` (trees, candy canes, gifts) |
 
-The other built-in theme is `winter`. A holiday's own decorated cell (the bunny on Easter Sunday, a tree on Christmas Day) appears
+The other built-in theme is `winter`. A holiday's own icon (the bunny on Easter Sunday, a tree on Christmas Day) appears
 in whatever design that month wears.
 
 - `THEME=auto` (the default) follows the date as above. `THEME=none` turns theming off. `THEME=easter` (any theme
@@ -98,8 +99,8 @@ themes:
     - { from: easter-7, to: easter+1, theme: easter }   # MM-DD, or easter / thanksgiving with an offset in days
     - { from: 10-24, to: 10-31, theme: halloween }
   builtin_windows: true          # false: only your windows
-  marks:                         # a decorated day cell on a date, every year, in any theme
-    "05-14": { motif: star, tint: "#fff3c4", deco: ["#f5b700"] }
+  marks:                         # an icon on a day cell, on a date, every year, in any theme
+    "05-14": { motif: star }
   takeovers:                     # holiday posters, see "Holiday posters" below; yours come before the built-in ones
     - { from: 06-14, scene: birthday, greeting: [HAPPY, BIRTHDAY] }   # picture: themes/birthday/poster.png
   builtin_takeovers: true        # false: only your takeovers
@@ -112,7 +113,7 @@ themes:
       ground: { kind: hills, colors: ["#2a1a40", "#1c1030"], height: 0.3 }
       motifs: [pumpkin, ghost, bat, moon]               # the large pictures in the header; [bat, 2] picks a variant
       holidays:
-        "10-31": { motif: pumpkin, tint: "#ffe0b0", deco: ["#ff8a1f"] }
+        "10-31": { motif: pumpkin }
 ```
 
 | Key of a custom theme | Meaning |
@@ -123,10 +124,10 @@ themes:
 | `pattern` | `kind` (`dots`, `confetti`, `snow`, `stars`, `hearts`, `leaves`, `clover`, `lines`), `colors`, `size`, `density` (pixels² per shape: smaller is busier); `null` for none |
 | `ground` | `kind` (`hills`, `snow`, `waves`, `stripes`), `colors`, `height` (a fraction of the banner); `null` for none |
 | `motifs` | the pictures along the header and footer: names from the list in [themes/README.md](../themes/README.md), each optionally `[name, variant]` |
-| `holidays` | decorated day cells for this theme: a date (`MM-DD`, `easter+0`, `thanksgiving`) mapped to `motif`, `tint`, `deco` (a few speckle colors) and optional `speckle: stars` |
+| `holidays` | icons on day cells for this theme: a date (`MM-DD`, `easter+0`, `thanksgiving`) mapped to a `motif` (and optional `variant`). `tint`, `deco` and `speckle` from older configs are still accepted, but a holiday cell is no longer tinted |
 
 **What a theme's colors change, and what they do not.** The colors cover the scenery: the weekday and panel-title color, the banner and
-footer gradient, the scattered pattern, the ground, and the holiday cell tints. The motifs are drawn pictures with their own colors (an
+footer gradient, the scattered pattern, the ground, and today's tint. The motifs are drawn pictures with their own colors (an
 orange pumpkin, a white ghost, each with a black outline so it sits on any sky), and a theme chooses which ones appear but does not
 recolor them. If you want a specific look for one, draw it as a PNG (below); a few motifs (eggs, flowers, hearts) also have colored
 `[name, variant]` versions.
@@ -180,7 +181,7 @@ a list of motifs.
 With no `DISPLAY_HOST` / `DISPLAY_PIN` the server only renders and serves ("serve-only"). Open
 `http://localhost:8080/` for the latest frame, or `/preview` to render one on demand.
 `/preview?now=2026-11-03T15:00:00-05:00` shows another day (another month, another theme), `?layout=timeline`
-and `?theme=easter` pick a layout and theme, and `?rotation=90` another orientation. `npm run demo` renders
+and `?theme=easter` pick a layout and theme (`?weeks=0` the timeline's whole month), and `?rotation=90` another orientation. `npm run demo` renders
 the sample images in `docs/images/` from the synthetic calendars in `examples/`.
 
 ## Calendars
@@ -423,7 +424,7 @@ JSON), and commands to `<prefix>/<display>/set/refresh | redraw | check | batter
 
 The panel has six inks and mixes them into everything else by dithering. Two settings decide who does that mixing,
 one for the decoration and one for the edges of text and shapes. Solid fills and lines are always exact inks, and
-colors very near an ink (outlines, today's yellow band) become that ink. A frame is drawn on two layers:
+colors very near an ink (outlines) become that ink. A frame is drawn on two layers:
 
 - **Content** (text, lines, boxes, bars, the date and legend plates) is drawn in the pure inks. `TEXT_AA` is what happens at the
   antialiased edges of letters and rounded corners:
@@ -432,7 +433,7 @@ colors very near an ink (outlines, today's yellow band) become that ink. A frame
   - **`threshold`**: a pixel is ink if at least `TEXT_CUT` (default 0.4) of it is covered, else nothing. Crisp, but thin
     strokes can break up, which makes some lowercase letters look odd. Every pixel is exactly one of the six inks.
   - **`dither`**: ink in proportion to coverage, by a fixed pattern, so edges are a halftone. Also six inks only.
-- **Theme art** (gradients, pastels, motifs, holiday-cell tints) is full color, and `ART_DITHER` says who mixes it:
+- **Theme art** (gradients, pastels, motifs, today's tint) is full color, and `ART_DITHER` says who mixes it:
   - **`panel`** (default): sent in true color, so the panel's own dithering mixes the inks.
   - **`pattern`**: we mix it from all six inks with a regular-pattern tile per color, so a pastel pink is white with some
     red, a purple is blue with red and a teal is green with blue, evenly, so it stays clean next to text. Red is never

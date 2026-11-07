@@ -17,7 +17,7 @@ import { px } from './scale.mjs';
 import { BLACK, WHITE, RED, YELLOW, GREEN, BLUE } from './inks.mjs';
 import { buildMonth, dayAgenda, upcomingDays } from './calendar.mjs';
 import { addDays, diffDays, dayOfMonth, monthOf, fullDay, longDay, shortDay, clock } from './dates.mjs';
-import { drawMotif, drawScene, drawCellDecor, stampsFor } from './themes.mjs';
+import { drawMotif, drawScene, drawCellDecor, stampsFor, todayMark } from './themes.mjs';
 
 export const INK = { red: RED, green: GREEN, blue: BLUE, black: BLACK, yellow: YELLOW };
 /** Text color that reads on a fill of this ink. (Green is white: on the panel its green is much darker than on a screen.) */
@@ -305,11 +305,11 @@ function markedDays(model) {
 
 /**
  * The month: all-day and multi-day events as bars across the days, single-day timed events as titles
- * (or, when `compact`, as a row of colored dots) in whatever rows the bars leave free.
+ * (or, when `compact`, as a row of colored dots) in whatever rows the bars leave free. With `count` weeks set, only that many
+ * from the one holding today: no day is dimmed as another month's (a month name marks each 1st), and a timed event shows its start time.
  */
-export function drawMonth(ctx, model, x, y, w, h, S, { compact = false } = {}) {
-  const month = buildMonth(model);
-  const weeks = month.weeks;
+export function drawMonth(ctx, model, x, y, w, h, S, { compact = false, weeks: count = 0 } = {}) {
+  const weeks = buildMonth(model, { weeks: count }).weeks;
   const colW = w / 7;
   const wdH = px(WEEKDAY_H);
   const rowH = (h - wdH) / weeks.length;
@@ -337,28 +337,28 @@ export function drawMonth(ctx, model, x, y, w, h, S, { compact = false } = {}) {
     // Cells.
     week.days.forEach((key, ci) => {
       const cx = x + ci * colW;
-      const inMonth = monthOf(key) === monthOf(model.today);
+      const inMonth = count > 0 || monthOf(key) === monthOf(model.today);
       const holiday = stamps.get(key); // the theme's tinted, decorated background for a holiday
       const isToday = key === model.today;
       const motifSize = px(compact ? 24 : 30);
-      if (holiday) drawCellDecor(S.art, holiday, cx, top, colW, rowH, motifSize);
-      if (isToday) {
-        // Today: a yellow band across the date number (not down into the events), inside a heavy black frame.
-        // Yellow is the ink itself, so it never dithers. On the art layer, with the holiday's motif redrawn on top.
-        const a = S.art; // the band runs out under the frame, so no sliver of paper shows between them
-        a.fillStyle = YELLOW; a.fillRect(Math.floor(cx), Math.floor(top), Math.ceil(cx + colW) - Math.floor(cx), Math.round(NUM_H));
-        if (holiday) drawMotif(a, holiday.motif, cx + colW - motifSize * 0.62, top + motifSize * 0.58, motifSize, holiday.variant ?? 0);
-      }
+      // Today wears a tint of the theme's colors, a heavy frame and a "TODAY" label; with no theme there is no art, so only the frame and
+      // the label. A holiday is not tinted: it is marked by its icon in the corner, today or not.
+      if (isToday && S.theme) drawCellDecor(S.art, { ...todayMark(S.theme), variant: holiday?.variant }, cx, top, colW, rowH, motifSize, holiday?.motif ?? null);
+      else if (holiday) drawMotif(S.art, holiday.motif, cx + colW - motifSize * 0.62, top + motifSize * 0.58, motifSize, holiday.variant ?? 0);
       ctx.strokeStyle = BLACK; ctx.lineWidth = line; ctx.strokeRect(cx, top, colW, rowH);
       const n = String(dayOfMonth(key));
-      const red = !isToday && (ci === 0 || marked.has(key));
+      const red = marked.has(key); // only a holiday is red, not a Sunday
       ctx.fillStyle = red ? RED : BLACK;
       ctx.font = inMonth || isToday ? F.bold(17) : F.regular(15);
       ctx.fillText(n, cx + px(8), top + px(20));
-      if (!inMonth) { // a small tick marks days from the neighbouring months, since there is no gray to dim them with
+      let nx = cx + px(8) + ctx.measureText(n).width + px(6); // what follows the number: a month name, then "TODAY"
+      // A small name marks days of another month (there is no gray to dim them with), or with `count` weeks the 1st and the first cell.
+      if (count > 0 ? dayOfMonth(key) === 1 || (wi === 0 && ci === 0) : !inMonth) {
         ctx.fillStyle = BLACK; ctx.font = F.regular(11);
-        ctx.fillText(new Date(Date.UTC(2000, Number(key.slice(5, 7)) - 1, 1)).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short' }), cx + px(26), top + px(19));
+        const name = new Date(Date.UTC(2000, Number(key.slice(5, 7)) - 1, 1)).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short' });
+        ctx.fillText(name, nx, top + px(19)); nx += ctx.measureText(name).width + px(6);
       }
+      if (isToday) { ctx.fillStyle = BLACK; ctx.font = F.bold(11); ctx.fillText('TODAY', nx, top + px(19)); }
     });
     if (week.days.includes(model.today)) { // heavier frame around today
       const ci = week.days.indexOf(model.today);
@@ -409,7 +409,12 @@ export function drawMonth(ctx, model, x, y, w, h, S, { compact = false } = {}) {
         const ly = top + NUM_H + free[i] * LINE_H, ink = ev.cal.color, bx = cx + px(2);
         ctx.fillStyle = INK[ink]; ctx.fillRect(bx, ly + px(1), px(4), px(17));
         ctx.fillStyle = BLACK; ctx.font = F.regular(13);
-        drawText(ctx, fit(ctx, ev.title, F.regular(13), colW - px(14)), cx + px(2) + px(6), ly + px(14));
+        let tx = cx + px(2) + px(6);
+        if (count > 0 && !ev.allDay) { // the start time, short ("9a", "2:30p"), in bold before the title
+          const t = clock(ev.start).replace(':00', '').replace(' AM', 'a').replace(' PM', 'p');
+          ctx.font = F.bold(12); ctx.fillText(t, tx, ly + px(14)); tx += ctx.measureText(t).width + px(5); ctx.font = F.regular(13);
+        }
+        drawText(ctx, fit(ctx, ev.title, F.regular(13), cx + colW - px(6) - tx), tx, ly + px(14));
       });
       if (compact) {
         const listed = evs.slice(0, free.length); // the events that fit are listed by title, the rest become dots
@@ -537,8 +542,8 @@ export function drawAgenda(ctx, model, x, y, w, h, S, { comingUp = true } = {}) 
 }
 
 /** The next days that have anything on, a line per event, as far as the room goes. */
-export function drawComingUp(ctx, model, x, y, w, bottom, S, { span = 14, title = 'COMING UP' } = {}) {
-  let cy = panelHeader(ctx, x, y, w, title, '', S);
+export function drawComingUp(ctx, model, x, y, w, bottom, S, { span = 14, title = 'COMING UP', header = true } = {}) {
+  let cy = header ? panelHeader(ctx, x, y, w, title, '', S) : y + px(2); // `header: false`: the title is drawn elsewhere
   for (const day of upcomingDays(model, model.today, span)) {
     if (cy + px(26) + px(22) > bottom) break; // a day heading needs room for at least one event under it
     ctx.fillStyle = BLACK; ctx.font = F.bold(15);

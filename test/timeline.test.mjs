@@ -89,10 +89,22 @@ test('empty hours fold only between events, never at the start or end of the nor
 test('a quiet midday is not folded while the hours have room; a crowded day still folds', async () => {
   const big = geometryFor({ width: 1440, height: 2560, rotation: 0 });
   const two = [event('a', 'Morning', at(9), at(12)), event('b', 'Afternoon', at(15), at(16, 30))]; // exactly 3 empty hours between
-  const opts = { geometry: big, layout: 'timeline', theme: 'none', ambientHours: 24, dayStart: 7, dayEnd: 20 };
+  const opts = { geometry: big, layout: 'timeline', theme: 'none', ambientHours: 24, dayStart: 7, dayEnd: 20, weeks: 0 };
   const folding = await render(model(two), { ...opts, breakHours: 3 });
   const flat = await render(model(two), { ...opts, breakHours: 0 });
   assert.deepEqual(folding, flat, 'with room for every hour the day is drawn hour by hour');
   const long = [event('a', 'Early', at(0, 30), at(1, 30)), event('b', 'Late', at(22), at(23, 30)), event('c', 'Noon', at(12), at(13))]; // the whole day, with gaps of 10 hours
   assert.notDeepEqual(await render(model(long), { ...opts, dayStart: 0, dayEnd: 24, breakHours: 3 }), await render(model(long), { ...opts, dayStart: 0, dayEnd: 24, breakHours: 0 }), 'a day too tall for its hours still folds');
+});
+
+test('the timeline shows this week and next by default, a month with weeks: 0, and renders themed (the title band) and unthemed', async () => {
+  const events = [event('a', 'Standup', at(9), at(9, 30)), event('b', 'Dentist', at(15), at(16), { startDay: '2026-04-17', endDay: '2026-04-17', start: at(15, 0, 17), end: at(16, 0, 17) })];
+  const shots = {};
+  for (const [name, opts] of Object.entries({ month: { weeks: 0, theme: 'none' }, fortnight: { weeks: 2, theme: 'none' }, themed: { weeks: 2, theme: 'autumn', takeover: false }, three: { weeks: 3, theme: 'autumn', takeover: false } })) {
+    shots[name] = await render(model(events), { geometry, layout: 'timeline', ...opts });
+    assert.equal(shots[name].subarray(1, 4).toString(), 'PNG', name);
+  }
+  assert.notDeepEqual(shots.month, shots.fortnight, 'the weeks setting changes the picture');
+  assert.notDeepEqual(shots.themed, shots.three);
+  assert.notDeepEqual(shots.fortnight, shots.themed);
 });

@@ -150,3 +150,11 @@ test('the same inputs always give the same picture (nothing depends on the clock
   const b = await render({ ...model, now: new Date('2026-10-20T23:30:00Z') }, { geometry, layout: 'timeline', theme: 'auto' });
   assert.ok(a.equals(b));
 });
+
+test("a custom holiday needs only a motif: tint, deco and speckle from older configs are accepted but not required", () => {
+  const plan = buildThemePlan({ marks: { '05-14': { motif: 'star' }, '06-01': { motif: 'heart', tint: '#fff3c4', deco: ['#f5b700'] } } });
+  const marks = plan.marks(2026);
+  assert.equal(marks['2026-05-14'].motif, 'star');
+  assert.equal(marks['2026-06-01'].motif, 'heart');
+  assert.throws(() => buildThemePlan({ marks: { '05-14': { motif: 'star', tint: 'yellow' } } }), /tint must be a color/);
+});

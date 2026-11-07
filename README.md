@@ -17,7 +17,7 @@ redraws the panel only when something changed. Home Assistant can decide *when* 
 
 ## What it does
 
-- **Month grid** with multi-day events as one bar that wraps across weeks, timed events as titles with a thin bar in the calendar's color, per-calendar colors, red Sundays and holidays.
+- **Month grid** with multi-day events as one bar that wraps across weeks, timed events as titles with a thin bar in the calendar's color, per-calendar colors, red holidays, and today marked by a tint, a frame and a TODAY label.
 - **Today's agenda** with location, video link, guests and notes, plus **coming up** and a **shopping list** (JSON/text file or Google Tasks).
 - **Holiday posters:** on the big days (Valentine's, St. Patrick's, Easter, Fourth of July, Halloween, Thanksgiving, Christmas, New Year) the calendar steps aside for a full-screen illustration and just today's agenda. [Draw your own](#holiday-posters).
 - **Two layouts** (`paper`, `timeline`) and a **theme for every month plus the holidays** (full color; Easter only around Easter, Halloween only the last week of October): [make your own](#themes) in the config file, with your own header and footer artwork if you like.
@@ -95,8 +95,8 @@ themes:
     - { from: easter-7, to: easter+1, theme: easter }   # MM-DD, or easter / thanksgiving with an offset in days
     - { from: 10-24, to: 10-31, theme: halloween }
   builtin_windows: true          # false: only your windows
-  marks:                         # a decorated day cell on a date, every year, in any theme
-    "05-14": { motif: star, tint: "#fff3c4", deco: ["#f5b700"] }
+  marks:                         # an icon on a day cell, on a date, every year, in any theme
+    "05-14": { motif: star }
   custom:                        # your own themes
     october-night:
       extends: halloween         # start from a built-in theme (optional)
@@ -106,10 +106,10 @@ themes:
       ground: { kind: hills, colors: ["#2a1a40", "#1c1030"], height: 0.3 }
       motifs: [pumpkin, ghost, bat, moon]               # the large pictures in the header
       holidays:
-        "10-31": { motif: pumpkin, tint: "#ffe0b0", deco: ["#ff8a1f"] }
+        "10-31": { motif: pumpkin }
 ```
 
-A custom theme changes the scenery's colors (bands, sky, pattern, ground, holiday tints) and chooses which motifs appear. The motifs
+A custom theme changes the scenery's colors (bands, sky, pattern, ground, and today's tint) and chooses which motifs appear. The motifs
 are drawn pictures with their own colors; to change one, or the whole banner and footer, draw your own PNGs
 ([themes/README.md](themes/README.md)).
 

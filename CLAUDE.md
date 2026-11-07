@@ -66,11 +66,12 @@ User docs: `README.md`, `docs/CONFIGURATION.md`. What is known about the panel: 
 - Layouts are `(ctx, model, {w, h, S})` functions, where S = `styleFor(theme)`. A theme (`themes.mjs`) is full
   color: a chrome color (weekday band, panel headers; dark enough for white text), a banner and footer scene
   (gradient sky, scattered pattern, ground: hills/snow/waves/stripes), motifs (`strip`) and holiday `marks` that
-  tint and decorate that day's cell (Easter by computus, Thanksgiving as 4th Thursday). A themed frame reserves a
+  put an icon on that day's cell, never a tint (Easter by computus, Thanksgiving as 4th Thursday). A themed frame reserves a
   taller header (`headerH`) and a footer (`footerH`) that holds the legend; layouts must use those, not
   constants. `THEME=auto` resolves by the date of `model.today`: a holiday window (`BUILTIN_WINDOWS`, plus the config's) if one
   holds it, else the month's design (`MONTH_THEMES`, overridden by the config's `themes.months` or `THEME_JAN`..`THEME_DEC`); HA's
   Theme select overrides all. Holiday cell decorations (`marks`) are independent of the theme: every built-in one shows in any design.
+- Timeline layout (`timelineLayout`): the month grid shows `S.weeks` weeks (`TIMELINE_WEEKS`, default 2; `buildMonth(model, { weeks })`, `weeksFrom`; 0 is the whole month), rows as tall as the busiest day needs, a title band with white tabs when themed. Today's cell: a tint of the theme's own colors (`todayMark` in `themes.mjs`, only with a theme), a heavy frame and a TODAY label. Only marked holidays have red numbers.
 - Month grid: bars (all-day or multi-day) get lanes across a week; timed single-day events fill the rows each
   day's bars leave free; overflow is "+N more". Cell capacity comes from the row height.
 - Keep the drawing parts in `draw.mjs` free of data logic.

@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import rrulePkg from 'rrule'; // CommonJS: no named exports under ESM
 const { RRule } = rrulePkg;
 import * as config from './config.mjs';
-import { addDays, clock, dateOnlyKey, dayKey, diffDays, monthWeeks } from './dates.mjs';
+import { addDays, clock, dateOnlyKey, dayKey, diffDays, monthWeeks, weeksFrom } from './dates.mjs';
 import { getShopping } from './shopping.mjs';
 
 // --- Time zones ----------------------------------------------------------------------------------
@@ -262,10 +262,11 @@ const isBar = (ev) => ev.allDay || ev.multiDay;
 
 /**
  * The month as weeks. All-day and multi-day events become bars that run across the days of a week
- * (several lanes deep when they overlap); single-day timed events are listed under their day.
+ * (several lanes deep when they overlap); single-day timed events are listed under their day. With `weeks` set, only that many
+ * weeks, from the one holding today, instead of the whole month (the model's range, to today + 21 days, always covers up to three).
  */
-export function buildMonth(model) {
-  const weeks = monthWeeks(model.today).map((days) => {
+export function buildMonth(model, { weeks: count = 0 } = {}) {
+  const weeks = (count > 0 ? weeksFrom(model.today, count) : monthWeeks(model.today)).map((days) => {
     const first = days[0], last = days[6];
     const segs = model.events.filter((ev) => isBar(ev) && ev.startDay <= last && ev.endDay >= first).map((ev) => {
       const startCol = ev.startDay < first ? 0 : diffDays(first, ev.startDay);

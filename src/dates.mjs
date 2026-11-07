@@ -34,6 +34,12 @@ export function monthWeeks(key) {
   return weeks;
 }
 
+/** `count` weeks (arrays of seven day keys, Sunday first) from the week containing `key`. */
+export function weeksFrom(key, count) {
+  const start = addDays(key, -weekday(key));
+  return Array.from({ length: count }, (_, w) => Array.from({ length: 7 }, (_, i) => addDays(start, w * 7 + i)));
+}
+
 export const monthTitle = (key) => new Date(toUtc(key)).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' });
 export const longDay = (key) => new Date(toUtc(key)).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' });
 export const fullDay = (key) => new Date(toUtc(key)).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { createQuantizer, INK_HEX } from '../src/quantize.mjs';
 import { rgb } from '../src/inks.mjs';
+import { THEMES, todayMark, stampsFor } from '../src/themes.mjs';
 import { render } from '../src/render.mjs';
 import { geometryFor } from '../src/geometry.mjs';
 
@@ -135,13 +136,22 @@ test('art panel mode: themed frames are true color PNGs, and with exact-ink text
   assert.throws(() => render(model, { geometry, layout: 'paper', text: 'bogus' }), /Unknown text mode/);
 });
 
-test("today is a yellow band across the date inside a heavy black frame, not a yellow box", async () => {
+test("today is a cell tinted in the theme's color with a TODAY label; a holiday is not tinted; only a holiday's number is red", async () => {
   const geometry = geometryFor({ width: 480, height: 854, rotation: 0 });
-  const yellow = async (m) => (await pixels(await render(m, { geometry, layout: 'paper', theme: 'none', art: 'pattern', text: 'threshold' }))).counts.get('255,255,0') ?? 0;
-  const n = await yellow(model);
-  assert.ok(n > 150, 'a band of yellow ink');
-  assert.ok(n < 1200, 'but far less than a whole box (about 5700 pixels at this size)');
-  assert.ok(await yellow({ ...model, today: '2026-04-20' }) > 150, 'any day');
+  const tintOf = (name) => rgb(todayMark(THEMES[name]).bg).join(',');
+  assert.notEqual(tintOf('autumn'), tintOf('winter'), "each theme's own tint");
+  const themed = await pixels(await render(model, { geometry, layout: 'paper', theme: 'autumn', takeover: false, text: 'threshold' }));
+  assert.ok((themed.counts.get(tintOf('autumn')) ?? 0) > 800, "today's cell is tinted");
+  const later = { ...model, today: '2026-04-20' }; // Easter Sunday, April 5, is a holiday on the page but not today
+  const easter = stampsFor(THEMES.autumn, ['2026-04-05']).get('2026-04-05');
+  assert.ok(easter, 'a holiday with its mark');
+  const page = await pixels(await render(later, { geometry, layout: 'paper', theme: 'autumn', takeover: false, text: 'threshold' }));
+  assert.equal(page.counts.get(rgb(easter.bg).join(',')) ?? 0, 0, 'the holiday cell has no tint of its own, only its icon');
+  const plain = await pixels(await render(model, { geometry, layout: 'paper', theme: 'none', art: 'pattern', text: 'threshold' }));
+  assert.equal(plain.counts.get(tintOf('autumn')) ?? 0, 0, 'no theme, no tint');
+  assert.equal(plain.counts.get('255,255,0') ?? 0, 0, 'and no yellow band any more');
+  const none = { ...model, events: [], today: '2026-04-20' }; // nothing on the calendar: April 5 and 12 are Sundays
+  assert.equal((await pixels(await render(none, { geometry, layout: 'paper', theme: 'none', art: 'pattern', text: 'threshold' }))).counts.get('255,0,0') ?? 0, 0, 'no red on the page without a holiday');
 });
 
 test('text edge modes: panel keeps in-between colors, threshold and dither stay six inks', () => {

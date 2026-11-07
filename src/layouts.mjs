@@ -16,6 +16,7 @@ import {
   INK, ON, F, MARGIN, WEEKDAY_H, headerH, footerH, fit, drawText, wrap, roundedRect,
   drawHeader, drawMonth, drawAgenda, drawComingUp, drawShopping, panelHeader, timeLabel,
 } from './draw.mjs';
+import { drawScene, drawMotif } from './themes.mjs';
 
 // --- paper: month, then agenda + shopping ---------------------------------------------------------------
 
@@ -83,9 +84,14 @@ function compactTop(ctx, model, w, S) {
   drawHeader(ctx, model, w, S);
   const x = px(MARGIN), cw = w - 2 * px(MARGIN);
   const gridTop = px(headerH(S) + 8);
-  const weeks = buildMonth(model).weeks.length;
-  const gridH = px(WEEKDAY_H) + weeks * px(weeks > 5 ? 80 : 100); // a five-week month's rows hold three lines of titles
-  drawMonth(ctx, model, x, gridTop, cw, gridH, S, { compact: true });
+  const count = S.weeks ?? 0; // 0: the whole month; else this many weeks from today's
+  const weeks = buildMonth(model, { weeks: count }).weeks;
+  // The whole month: five-week rows hold three lines of titles. A few weeks: rows are as tall as the busiest day needs, no taller
+  // (the date, a line for each bar and timed event, and the row for dots), so what is left goes to the day below.
+  const lines = Math.max(0, ...weeks.flatMap((wk) => wk.days.map((d, ci) => Math.max(0, ...wk.bars.filter((b) => ci >= b.startCol && ci <= b.endCol).map((b) => b.lane + 1)) + (wk.singles.get(d)?.length ?? 0))));
+  const rowH = count > 0 ? Math.min(260, Math.max(110, 22 + 20 * lines + 17)) : weeks.length > 5 ? 80 : 100;
+  const gridH = px(WEEKDAY_H) + weeks.length * px(rowH);
+  drawMonth(ctx, model, x, gridTop, cw, gridH, S, { compact: true, weeks: count });
   return gridTop + gridH + px(14);
 }
 
@@ -185,9 +191,9 @@ export function dayMinutes(ev, key) {
  *  - if the hours still cannot be drawn legibly (a block an hour long would be tiny, or more than six events overlapping at once),
  *    the day is listed in time order instead.
  */
-function drawTimeline(ctx, model, x, y, w, h, S) {
+function drawTimeline(ctx, model, x, y, w, h, S, { header = true } = {}) {
   const bottom = y + h;
-  let cy = panelHeader(ctx, x, y, w, 'TODAY', longDay(model.today), S);
+  let cy = header ? panelHeader(ctx, x, y, w, 'TODAY', '', S) : y + px(2); // the page's own header says the date; `header: false`: the title is drawn elsewhere
   const key = model.today;
   const list = dayAgenda(model, key);
   const allDay = list.filter((e) => e.allDay);
@@ -326,19 +332,51 @@ function drawDayList(ctx, span, key, x, top, w, bottom) {
   if (shown < span.length) { ctx.fillStyle = BLACK; ctx.font = F.bold(14); ctx.fillText(`+${span.length - shown} more`, x + px(14), top + shown * rowH + rowH / 2 + px(5)); }
 }
 
+/**
+ * A scenic band across the page, like the footer, with the titles of the two panels below it as white tabs: each stands on the
+ * band's lower edge with a rounded top, and flares out at its foot, so it runs into the white panel beneath. Motifs stand on the
+ * band between the tabs. Returns where the band ends.
+ */
+function drawTitleBand(ctx, S, y, w, bandH, tabs) {
+  const T = S.theme, edge = y + bandH, th = px(42), top = edge - th, r = px(12), f = px(16);
+  drawScene(S.art, T, 0, y, w, bandH, 5);
+  S.art.fillStyle = T.chrome; S.art.fillRect(0, y, w, px(4)); S.art.fillRect(0, edge - px(4), w, px(4));
+  ctx.textBaseline = 'alphabetic'; ctx.font = F.bold(19);
+  const taken = [];
+  for (const { text, x } of tabs) {
+    const tw = ctx.measureText(text).width + px(30);
+    ctx.beginPath(); ctx.moveTo(x - f, edge + 1); ctx.quadraticCurveTo(x, edge, x, edge - f); ctx.lineTo(x, top + r); ctx.quadraticCurveTo(x, top, x + r, top);
+    ctx.lineTo(x + tw - r, top); ctx.quadraticCurveTo(x + tw, top, x + tw, top + r); ctx.lineTo(x + tw, edge - f); ctx.quadraticCurveTo(x + tw, edge, x + tw + f, edge + 1); ctx.closePath();
+    ctx.fillStyle = WHITE; ctx.fill();
+    ctx.fillStyle = BLACK; ctx.fillText(text, x + px(15), top + th / 2 + px(7));
+    taken.push([x - f - px(14), x + tw + f + px(14)]);
+  }
+  const step = px(86);
+  for (let i = 0, mx = px(MARGIN) + step / 2; mx < w - px(MARGIN) - px(20); i++, mx += step) {
+    if (taken.some(([a, b]) => mx + px(20) > a && mx - px(20) < b)) continue;
+    const [motif, variant] = T.strip[i % T.strip.length];
+    drawMotif(S.art, motif, mx, y + bandH * 0.5, px(40), variant + i);
+  }
+  return edge;
+}
+
 function timelineLayout(ctx, model, { w, h, S }) {
-  const top = compactTop(ctx, model, w, S);
-  const x = px(MARGIN), cw = w - 2 * px(MARGIN);
-  const bottom = h - px(S.theme ? 12 : MARGIN) - px(footerH(S)), gap = px(14);
+  let top = compactTop(ctx, model, w, S);
+  const x = px(MARGIN), cw = w - 2 * px(MARGIN), gap = px(14);
   const lw = Math.round(cw * 0.6);
-  drawTimeline(ctx, model, x, top, lw, bottom - top, S);
   const rx = x + lw + gap, rw = cw - lw - gap;
+  let bottom = h - px(S.theme ? 12 : MARGIN) - px(footerH(S)), header = true;
+  if (S.theme) { // the titles are tabs on a band; the panels are plain white under it and run down to the footer
+    const edge = drawTitleBand(ctx, S, top, w, px(70), [{ text: 'TODAY', x: x + px(14) }, { text: 'COMING UP', x: rx + px(14) }]);
+    top = edge + px(14); bottom = h - px(footerH(S)) - px(6); header = false;
+  }
+  drawTimeline(ctx, model, x, top, lw, bottom - top, S, { header });
   if (model.shopping) {
     const shopH = Math.round((bottom - top) * 0.4);
-    drawComingUp(ctx, model, rx, top, rw, bottom - shopH - gap, S, { span: 7 });
+    drawComingUp(ctx, model, rx, top, rw, bottom - shopH - gap, S, { span: 7, header });
     drawShopping(ctx, model, rx, bottom - shopH, rw, shopH, S);
   } else {
-    drawComingUp(ctx, model, rx, top, rw, bottom, S, { span: 7 });
+    drawComingUp(ctx, model, rx, top, rw, bottom, S, { span: 7, header });
   }
 }
 

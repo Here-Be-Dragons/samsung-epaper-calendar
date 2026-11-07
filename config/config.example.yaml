@@ -54,8 +54,8 @@ calendars:
 #     - { from: 06-14, scene: birthday, greeting: [HAPPY, BIRTHDAY] }   # halloween, thanksgiving, christmas, newyear) or your own:
 #                                                                       # draw themes/birthday/poster.png (1440 x 2560 px)
 #   builtin_takeovers: true      # false: only your takeovers (TAKEOVERS=off in .env: none at all)
-#   marks:                       # a decorated day cell on a date, every year, in any theme
-#     "05-14": { motif: star, tint: "#fff3c4", deco: ["#f5b700"] }
+#   marks:                       # an icon on a day cell, on a date, every year, in any theme
+#     "05-14": { motif: star }
 #   custom:                      # your own themes
 #     october-night:
 #       extends: halloween       # start from a built-in or earlier custom theme (optional)
@@ -65,4 +65,4 @@ calendars:
 #       ground: { kind: hills, colors: ["#2a1a40", "#1c1030"], height: 0.3 }
 #       motifs: [pumpkin, ghost, bat, moon]              # the large pictures in the header
 #       holidays:
-#         "10-31": { motif: pumpkin, tint: "#ffe0b0", deco: ["#ff8a1f"] }
+#         "10-31": { motif: pumpkin }

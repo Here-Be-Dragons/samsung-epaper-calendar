@@ -219,7 +219,7 @@ function serveImage(req, res, entry, label, { fromPanel = false } = {}) {
 }
 
 // Render now without touching the panel: /preview?display=<id>&layout=timeline&theme=easter&art=pattern&rotation=90&now=2026-11-03T15:00:00-05:00
-// (`now` shows another day, to see a different month; `art` how the theme art is dithered; `takeover=off` the calendar on a holiday).
+// (`now` shows another day, to see a different month; `art` how the theme art is dithered; `takeover=off` the calendar on a holiday; `weeks=0..3` the weeks of the timeline's calendar).
 app.get('/preview', async (req, res) => {
   const display = pickDisplay(req, res);
   if (!display) return;
@@ -235,7 +235,9 @@ app.get('/preview', async (req, res) => {
     const art = String(req.query.art || config.ART_DITHER).toLowerCase();
     if (!config.ART_MODES.includes(art)) return res.status(400).json({ error: `art must be one of ${config.ART_MODES.join(', ')}` });
     const takeover = String(req.query.takeover ?? '').toLowerCase() === 'off' ? false : config.TAKEOVERS; // takeover=off: the calendar on a holiday
-    const img = await render(await getModel({ now }), { geometry: geometryOf(display, { rotation }), layout, theme, art, takeover });
+    const weeks = req.query.weeks === undefined ? config.TIMELINE_WEEKS : parseInt(req.query.weeks, 10);
+    if (!(weeks >= 0 && weeks <= 3)) return res.status(400).json({ error: 'weeks must be 0 (the whole month), 1, 2 or 3' });
+    const img = await render(await getModel({ now }), { geometry: geometryOf(display, { rotation }), layout, theme, art, takeover, weeks });
     res.header('Content-Type', imageType());
     res.header('Cache-Control', 'no-store');
     res.send(img);
